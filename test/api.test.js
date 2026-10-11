@@ -162,3 +162,27 @@ test('الأمان: ترويسات CSP، رفض أنواع المحتوى غير
   assert.equal((await fetch(base + '/..%2f..%2fserver/config.js')).status, 404);
   assert.equal((await fetch(base + '/../server/config.js')).status, 404);
 });
+
+test('PWA: المانيفست وعامل الخدمة والأيقونات تُقدَّم بأنواعها الصحيحة', async () => {
+  const m = await api('GET', '/manifest.webmanifest');
+  assert.equal(m.status, 200);
+  assert.match(m.headers.get('content-type'), /application\/manifest\+json/);
+  assert.equal(m.json.display, 'standalone');
+  for (const icon of m.json.icons) assert.equal((await fetch(base + icon.src)).status, 200, icon.src);
+  const sw = await api('GET', '/sw.js');
+  assert.equal(sw.status, 200);
+  assert.match(sw.headers.get('content-type'), /javascript/);
+  assert.match(sw.headers.get('cache-control'), /no-cache/);
+  assert.equal((await api('GET', '/offline.html')).status, 200);
+});
+
+test('PWA: عامل الخدمة لا يخزّن مسارات /api/ أبداً', () => {
+  const src = fs.readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(src, /startsWith\('\/api\/'\)\) return/);
+});
+
+test('الصحة: /api/health يعمل دون تسجيل دخول', async () => {
+  const r = await api('GET', '/api/health');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.ok, true);
+});
