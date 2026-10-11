@@ -29,7 +29,7 @@ export function loadConfig(overrides = {}) {
     sessionHours: Number(env.SESSION_HOURS ?? 8),
     cookieSecure: env.COOKIE_SECURE === '1',
     trustProxy: env.TRUST_PROXY === '1',
-    universityName: env.UNIVERSITY_NAME ?? '[اسم الجامعة]',
+    universityName: env.UNIVERSITY_NAME ?? 'الجامعة السورية للعلوم الأمنية',
     publicUrl: env.PUBLIC_URL ?? null,
     scryptN: Number(env.SCRYPT_N ?? 2 ** 15),
     maxAttachmentBytes: 2 * 1024 * 1024,

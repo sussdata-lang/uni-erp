@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" role="img" aria-label="شعار الجامعة (نسخة بديلة مؤقتة)"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0A5A4D"/><stop offset="1" stop-color="#032E28"/></linearGradient>
+<linearGradient id="au" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E6CB84"/><stop offset="1" stop-color="#C9A24B"/></linearGradient></defs>
+<path d="M100 10 L178 37 V112 C178 166 143 206 100 228 C57 206 22 166 22 112 V37 Z" fill="url(#g)" stroke="url(#au)" stroke-width="6" stroke-linejoin="round"/>
+<path d="M100 24 L166 46 V112 C166 158 137 193 100 213 C63 193 34 158 34 112 V46 Z" fill="none" stroke="#C9A24B" stroke-width="1.6" opacity=".7"/>
+<polygon points="68.0,52.0 70.5,58.6 77.5,58.9 72.0,63.3 73.9,70.1 68.0,66.2 62.1,70.1 64.0,63.3 58.5,58.9 65.5,58.6" fill="#E6CB84"/><polygon points="100.0,42.0 103.0,49.9 111.4,50.3 104.8,55.6 107.1,63.7 100.0,59.0 92.9,63.7 95.2,55.6 88.6,50.3 97.0,49.9" fill="#E6CB84"/><polygon points="132.0,52.0 134.5,58.6 141.5,58.9 136.0,63.3 137.9,70.1 132.0,66.2 126.1,70.1 128.0,63.3 122.5,58.9 129.5,58.6" fill="#E6CB84"/>
+<path d="M100 78 L108 100 L100 128 L92 100 Z" fill="url(#au)"/><circle cx="100" cy="100" r="2.6" fill="#032E28"/>
+<path d="M50 136 Q75 123 100 136 Q125 123 150 136 V176 Q125 164 100 177 Q75 164 50 176 Z" fill="url(#au)"/>
+<path d="M100 136 V177" stroke="#032E28" stroke-width="2.2"/>
+<path d="M58 146 Q76 138 92 146 M58 156 Q76 148 92 156 M108 146 Q124 138 142 146 M108 156 Q124 148 142 156" stroke="#032E28" stroke-width="1.6" fill="none" opacity=".55"/></svg>

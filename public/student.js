@@ -32,7 +32,7 @@
     shield: svg('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'),
   };
   const svcIcon = (c) => ({ transcript: IC.doc, excellence_year: IC.cap, campus_life: IC.bed }[c] || IC.doc);
-  const emblem = `<svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="شعار الجامعة" class="emblem"><circle cx="60" cy="60" r="56" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="60" cy="60" r="46" fill="var(--accent-soft)"/><path d="M28 52l32-16 32 16-32 16z" fill="currentColor"/><path d="M42 62v14c0 5 8 10 18 10s18-5 18-10V62l-18 9z" fill="currentColor" opacity=".75"/><path d="M92 52v18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`;
+  const emblem = `<img class="emblem" src="/brand/crest.svg" alt="شعار الجامعة" width="87" height="104">`;
 
   /* ---------- مكونات ---------- */
   const sk = (n = 5) => Array.from({ length: n }, () => '<div class="sk-card"><i class="sk-l w60"></i><i class="sk-l w40"></i></div>').join('');

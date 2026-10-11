@@ -1,15 +1,15 @@
 {
   "name": "بوابة خدمات الطلاب",
   "short_name": "خدمات الطلاب",
-  "description": "خدمات شؤون الطلاب: الطلبات والعلامات والأخبار والوثائق",
+  "description": "الجامعة السورية للعلوم الأمنية — خدمات شؤون الطلاب: الطلبات والعلامات والأخبار والوثائق",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#EEF1F4",
-  "theme_color": "#0B6E7F",
+  "background_color": "#06201C",
+  "theme_color": "#054239",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

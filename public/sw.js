@@ -1,8 +1,8 @@
 // عامل الخدمة: يجعل التطبيق قابلاً للتثبيت ويسرّع تحميل الملفات الثابتة.
 // قاعدة أمنية: لا تُخزَّن أي استجابة من /api/ إطلاقاً (بيانات الطلاب لا تُحفظ في ذاكرة الجهاز).
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `uni-erp-static-${VERSION}`;
-const PRECACHE = ['/offline.html', '/style.css', '/icons/icon-192.png'];
+const PRECACHE = ['/offline.html', '/style.css', '/icons/icon-192.png', '/brand/crest.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

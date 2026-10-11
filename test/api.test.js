@@ -186,3 +186,9 @@ test('الصحة: /api/health يعمل دون تسجيل دخول', async () => 
   assert.equal(r.status, 200);
   assert.equal(r.json.ok, true);
 });
+
+test('الإعدادات: اسم الجامعة يصل للواجهة من /api/me', async () => {
+  const r = await api('GET', '/api/me');
+  assert.equal(r.status, 200);
+  assert.equal(typeof r.json.university, 'string');
+});

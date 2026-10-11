@@ -23,7 +23,7 @@ export function buildRouter(deps) {
   r.add('POST', '/api/auth/change-password', async (c) => { await changePassword(deps, c.user, c.cookies.sid, c.body, c.ip); c.json(200, { ok: true }); }, { allowMustChange: true });
   // بلا جلسة يعيد user:null بحالة 200 (لا ضجيج 401 في المتصفح عند أول فتح)
   r.add('GET', '/api/health', (c) => { db.prepare('SELECT 1').get(); c.json(200, { ok: true }); }, { auth: false });   // فحص صحة للاستضافة
-  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(c.user) : null }), { auth: false });
+  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(c.user) : null, university: cfg.universityName }), { auth: false });
 
   r.add('GET', '/api/me/profile', (c) => { need(c, 'profile:read_own'); c.json(200, { profile: myProfile(deps, c.user) }); });
 

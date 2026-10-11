@@ -14,7 +14,7 @@ import { getDocument } from '../server/services/documents.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = openDb(':memory:');
-const cfg = { scryptN: 1024, signingKey: 'demo-key', universityName: '[اسم الجامعة]', uploadDir: '/tmp/demo-up', maxAttachmentBytes: 2e6 };
+const cfg = { scryptN: 1024, signingKey: 'demo-key', universityName: 'الجامعة السورية للعلوم الأمنية', uploadDir: '/tmp/demo-up', maxAttachmentBytes: 2e6 };
 const mk = (id, role, label, extra = {}) => ({ id, role, label, can: (p) => can(role, p), ...extra });
 db.prepare("INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES ('staff','م. الأحمد','x','staff',?)").run(Date.now());
 const staff = mk(1, 'staff', 'م. الأحمد');
@@ -81,8 +81,9 @@ const strip = (f) => fs.readFileSync(path.join(root, f), 'utf8').replace(/^expor
 const qr = strip('server/qr.js').replace('[...Buffer.from(text, \'utf8\')]', '[...new TextEncoder().encode(text)]');
 const shim = fs.readFileSync(path.join(root, 'scripts/demo-shim.js'), 'utf8');
 const data = JSON.stringify(state).replace(/</g, '\\u003c');
-const css = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
-const js = ['app.js', 'staff.js', 'student.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replace(/<\/script/gi, '<\\/script'));
+const crestUri = 'data:image/svg+xml;base64,' + fs.readFileSync(path.join(root, 'public/brand/crest.svg')).toString('base64');   // الملف المستقل لا يرى /brand/ فيُضمَّن الشعار
+const css = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8').replaceAll('/brand/crest.svg', crestUri);
+const js = ['app.js', 'staff.js', 'student.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replaceAll('/brand/crest.svg', crestUri).replace(/<\/script/gi, '<\\/script'));
 let html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
   .replace('<link rel="stylesheet" href="/style.css">', `<style>${css}\n.demo-bar{background:#fff4d6;color:#5b4300;font-size:13px;padding:6px 12px;border-bottom:1px solid #e7cf8a;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center}.demo-bar button{font:inherit;border:1px solid #c9a94e;background:#fff;color:#5b4300;border-radius:999px;padding:2px 12px;cursor:pointer}.demo-bar button[aria-pressed=true]{background:#5b4300;color:#fff}</style>`)
   .replace(/<script src="\/[a-z]+\.js" defer><\/script>\s*/g, '')
