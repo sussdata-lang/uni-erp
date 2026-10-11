@@ -6,6 +6,9 @@ import { createRequest, listRequests, getRequest, decide, stats, readAttachment 
 import { getDocument, verifyPublic } from './services/documents.js';
 import { audit, verifyAuditChain } from './audit.js';
 import { qrSvg } from './qr.js';
+import { getSite, saveSite } from './services/site.js';
+import { updateUser, setUserActive, resetUserPassword } from './services/useradmin.js';
+import { listServices, createService, updateService } from './services/catalog.js';
 
 const need = (ctx, perm) => { if (!ctx.user.can(perm)) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden'); };
 
@@ -23,7 +26,7 @@ export function buildRouter(deps) {
   r.add('POST', '/api/auth/change-password', async (c) => { await changePassword(deps, c.user, c.cookies.sid, c.body, c.ip); c.json(200, { ok: true }); }, { allowMustChange: true });
   // بلا جلسة يعيد user:null بحالة 200 (لا ضجيج 401 في المتصفح عند أول فتح)
   r.add('GET', '/api/health', (c) => { db.prepare('SELECT 1').get(); c.json(200, { ok: true }); }, { auth: false });   // فحص صحة للاستضافة
-  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(c.user) : null, university: cfg.universityName }), { auth: false });
+  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(c.user) : null, university: getSite(deps).university, site: getSite(deps) }), { auth: false });
 
   r.add('GET', '/api/me/profile', (c) => { need(c, 'profile:read_own'); c.json(200, { profile: myProfile(deps, c.user) }); });
 
@@ -110,6 +113,14 @@ export function buildRouter(deps) {
     c.json(200, { users: db.prepare('SELECT id, username, display_name AS name, role, student_no AS studentNo, active FROM users ORDER BY id').all() });
   });
   r.add('POST', '/api/admin/users', async (c) => { need(c, 'user:manage'); c.json(201, await createUser(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/admin/users/:id', (c) => { need(c, 'user:manage'); c.json(200, updateUser(deps, c.user, c.params.id, c.body, c.ip)); });
+  r.add('POST', '/api/admin/users/:id/active', (c) => { need(c, 'user:manage'); c.json(200, setUserActive(deps, c.user, c.params.id, c.body?.active, c.ip)); });
+  r.add('POST', '/api/admin/users/:id/reset-password', async (c) => { need(c, 'user:manage'); c.json(200, await resetUserPassword(deps, c.user, c.params.id, c.ip)); });
+  r.add('GET', '/api/admin/settings', (c) => { need(c, 'site:manage'); c.json(200, { site: getSite(deps) }); });
+  r.add('PUT', '/api/admin/settings', (c) => { need(c, 'site:manage'); c.json(200, { site: saveSite(deps, c.user, c.body, c.ip) }); });
+  r.add('GET', '/api/admin/services', (c) => { need(c, 'service:manage'); c.json(200, { services: listServices(deps) }); });
+  r.add('POST', '/api/admin/services', (c) => { need(c, 'service:manage'); c.json(201, createService(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/admin/services/:code', (c) => { need(c, 'service:manage'); c.json(200, updateService(deps, c.user, c.params.code, c.body, c.ip)); });
   r.add('GET', '/api/admin/holds', (c) => {
     need(c, 'holds:manage');
     c.json(200, { holds: db.prepare(`SELECT h.id, h.hold_type AS holdType, h.note, h.active, h.created_at AS createdAt, u.display_name AS student, u.student_no AS studentNo

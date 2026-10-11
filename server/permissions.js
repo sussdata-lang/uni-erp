@@ -6,7 +6,7 @@ export const PERMISSIONS = {
             'course:manage', 'grade:manage', 'news:manage', 'complaint:manage'],
   auditor: ['request:read_all', 'document:read_all', 'audit:read', 'stats:read'],
   admin:   ['request:read_all', 'request:decide', 'document:read_all', 'stats:read', 'audit:read',
-            'user:manage', 'rules:manage', 'holds:manage',
+            'user:manage', 'site:manage', 'service:manage', 'rules:manage', 'holds:manage',
             'student:register', 'student:read', 'student:update', 'student:reset_password', 'program:manage',
             'course:manage', 'grade:manage', 'news:manage', 'complaint:manage'],
 };

@@ -22,7 +22,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
 
   /* ---------- الحالة ---------- */
-  const S = { uni: 'الجامعة السورية للعلوم الأمنية', me: null, services: [], view: null, requests: [], stats: null, sel: null, filter: 'all', rej: null, svc: null, files: {},
+  const S = { uni: '[اسم الجامعة]', title: 'بوابة خدمات الطلاب', dept: 'قسم شؤون الطلاب', me: null, services: [], view: null, requests: [], stats: null, sel: null, filter: 'all', rej: null, svc: null, files: {},
     vtext: '', vres: null, adminTab: 'holds', admin: {}, audit: null, chain: null, err: '',
     reg: null, stTab: 'requests', stList: { q: '', program: '', status: '', students: [], total: 0 }, stSel: null, stEdit: null, cred: null, fieldErr: null, profile: null, programs: [] };
   const can = (p) => !!S.me && S.me.permissions.includes(p);
@@ -31,7 +31,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   const STAFF_NAV = [['affairs', 'شؤون الطلاب'], ['academics', 'المواد والعلامات'], ['comms', 'الأخبار والشكاوى']];
   function viewsFor(role) {
     if (role === 'student') return [['home', 'الرئيسية'], ['guide', 'دليل المواد'], ['grades', 'علاماتي'], ['news', 'الأخبار'], ['tx', 'معاملاتي']];
-    const v = { staff: STAFF_NAV, admin: [...STAFF_NAV, ['admin', 'الإدارة'], ['audit', 'التدقيق']], auditor: [['affairs', 'الطلبات'], ['audit', 'التدقيق']] }[role] || [];
+    const v = { staff: STAFF_NAV, admin: [...STAFF_NAV, ['admin', 'الإدارة'], ['site', 'إدارة الموقع'], ['services', 'إدارة الخدمات'], ['audit', 'التدقيق']], auditor: [['affairs', 'الطلبات'], ['audit', 'التدقيق']] }[role] || [];
     return [...v, ['verify', 'التحقق العام']];
   }
 
@@ -59,19 +59,18 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
 
   /* ---------- الشاشات ---------- */
   function loginView() {
-    return `<form class="login card" id="loginform"><div class="login-hero"><img class="crest" src="/brand/crest.svg" alt="شعار ${esc(S.uni)}"><h1>بوابة خدمات الطلاب</h1><div class="hint">${esc(S.uni)} · قسم شؤون الطلاب</div></div>
+    return `<form class="login card" id="loginform"><h1>${esc(S.title)}</h1><div class="hint">${esc(S.uni)} · ${esc(S.dept)}</div>
       ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
       <label>اسم المستخدم<input id="lg-u" autocomplete="username" required></label>
       <label>كلمة المرور<input id="lg-p" type="password" autocomplete="current-password" required></label>
       <button class="btn pri" type="submit">دخول</button>
-      <div class="actions" style="margin:0 22px 22px"><button class="btn sm" type="button" data-act="goverify">التحقق من وثيقة (بدون دخول)</button></div></form>`;
+      <div class="actions" style="margin:0"><button class="btn sm" type="button" data-act="goverify">التحقق من وثيقة (بدون دخول)</button></div></form>`;
   }
-  const siteFoot = () => `<footer class="site-foot"><div class="wrap"><div class="f-brand"><img class="crest sm" src="/brand/crest.svg" alt=""><div><b>${esc(S.uni)}</b><span class="gold">وزارة الداخلية · دمشق</span></div></div><div>جميع الحقوق محفوظة للجامعة السورية للعلوم الأمنية © 2026</div></div></footer>`;
   function header() {
     const tabs = viewsFor(S.me?.role ?? 'public').map((t) => `<button class="tab" role="tab" data-act="view" data-v="${t[0]}" aria-selected="${S.view === t[0]}">${t[1]}</button>`).join('');
     const who = S.me ? `<div class="who"><span><b>${esc(S.me.name)}</b> · ${ROLE_LABEL[S.me.role]}</span><button class="btn sm" data-act="logout">خروج</button></div>`
       : '<div class="who"><button class="btn sm" data-act="tologin">تسجيل الدخول</button></div>';
-    return `<header class="top"><div class="wrap"><div class="brand"><img class="crest" src="/brand/crest.svg" alt="" width="40" height="48"><div class="t"><b>بوابة خدمات الطلاب</b><span>${esc(S.uni)} · قسم شؤون الطلاب</span></div></div>
+    return `<header class="top"><div class="wrap"><div class="brand"><b>${esc(S.title)}</b><span>${esc(S.uni)} · ${esc(S.dept)}</span></div>
       <div class="tabs" role="tablist">${tabs}</div>${who}</div></header><div class="wrap" style="padding-top:16px">`;
   }
 
@@ -112,7 +111,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
 
   function adminView() {
-    const tabs = [['holds', 'الذمم والموانع'], ['rules', 'قواعد الفحص الآلي'], ['programs', 'البرامج الأكاديمية'], ['users', 'المستخدمون']];
+    const tabs = [['holds', 'الذمم والموانع'], ['rules', 'قواعد الفحص الآلي'], ['programs', 'البرامج الأكاديمية']];
     const bar = `<div class="sub-tabs">${tabs.map((t) => `<button class="chip" data-act="atab" data-t="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}</button>`).join('')}</div>`;
     const a = S.admin;
     if (S.adminTab === 'holds') {
@@ -242,7 +241,11 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     if (p.service.code === 'transcript') body = `<p>كشف علامات الطالب/ـة ${who}:</p><table><thead><tr><th>المقرر</th><th>الفصل</th><th>الساعات</th><th>العلامة</th></tr></thead><tbody>${p.transcript.grades.map((g) => `<tr><td>${esc(g.course)}</td><td>${esc(g.term)}</td><td>${g.hours}</td><td>${g.mark}</td></tr>`).join('')}</tbody></table><p style="margin-bottom:0">المعدل المرجَّح: ${p.transcript.average ?? '-'} من 100.</p>`;
     if (p.service.code === 'excellence_year') body = `<p>تشهد ${esc(p.university)} بأنه تقرر قبول تسجيل الطالب/ـة ${who}، المقيَّد/ـة في برنامج «${esc(st.program)}»، في سنة الامتياز للعام الدراسي ${esc(p.details.academic_year)}.</p>${p.details.notes ? `<p>ملاحظات: ${esc(p.details.notes)}</p>` : ''}`;
     if (p.service.code === 'excuse') body = `<p>بعد مراجعة المرفقات والتحقق من استيفائها للمدة النظامية، تقرر قبول العذر المقدَّم من الطالب/ـة ${who} عن امتحان مقرر «${esc(p.details.course)}» بتاريخ ${esc(p.details.exam_date)} (السبب: ${esc(p.details.reason)})، وتحديد موعد امتحان بديل.</p>`;
-    return `<div class="doc"><div class="doc-head"><img class="crest" src="/brand/crest.svg" alt=""><h2>${esc(p.university)}</h2></div><div class="sub">قسم شؤون الطلاب · ${esc(p.service.label)}</div><hr>${body}
+    if (!body) {
+      const L = p.fieldLabels || {}, rows = Object.entries(p.details || {}).map(([k, v]) => `<tr><td>${esc(L[k] || k)}</td><td>${esc(v)}</td></tr>`).join('');
+      body = `<p>تشهد ${esc(p.university)} بأن الطالب/ـة ${who}، المقيَّد/ـة في برنامج «${esc(st.program)}»، قدّم/ـت طلب «${esc(p.service.label)}»، وقد تمت الموافقة عليه.</p>${rows ? `<table><tbody>${rows}</tbody></table>` : ''}`;
+    }
+    return `<div class="doc"><h2>${esc(p.university)}</h2><div class="sub">${esc(S.dept)} · ${esc(p.service.label)}</div><hr>${body}
       <div class="doc-foot"><div><span class="stamp">موقّعة رقمياً</span><div style="margin-top:8px">رقم الطلب: <span class="mono">${esc(p.requestNo)}</span></div><div>تاريخ الإصدار: ${fmt(p.issuedAt)}</div><div>رمز التحقق: <span class="mono">${esc(d.code)}</span></div><div>البصمة: <span class="mono">${esc(d.hash.slice(0, 20))}…</span></div></div><div class="qr"><img alt="رمز QR للتحقق" src="/api/documents/${encodeURIComponent(d.code)}/qr.svg"></div></div></div>`;
   }
 
@@ -251,11 +254,11 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   function render() {
     const app = $('#app');
     document.body.classList.toggle('is-m', !!(S.me && S.me.role === 'student' && !S.me.mustChange));
-    if (!S.me && S.view !== 'verify') { app.innerHTML = loginView() + siteFoot(); return; }
+    if (!S.me && S.view !== 'verify') { app.innerHTML = loginView(); return; }
     if (S.me && S.me.mustChange) { app.innerHTML = mustChangeView(); return; }
     if (S.me && S.me.role === 'student') { app.innerHTML = UA.studentShell(); return; }
     const v = S.view === 'verify' ? verifyView : (UA.views[S.view] || BUILTIN[S.view] || (() => ''));
-    app.innerHTML = header() + '<main>' + v() + '</main></div>' + siteFoot();
+    app.innerHTML = header() + '<main>' + v() + '</main></div>';
   }
   async function loadFor(view) {
     if (!S.me) return;
@@ -394,9 +397,14 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   });
 
   /* ---------- الإقلاع ---------- */
+  UA.applySite = (x) => {
+    if (!x) return;
+    S.uni = x.university || S.uni; S.title = x.title || S.title; S.dept = x.department || S.dept;
+    document.title = S.title;
+  };
   UA.start = async function start() {
     const params = new URLSearchParams(location.search), code = params.get('verify');
-    try { const r = await api('GET', '/api/me'); S.uni = r.university ?? S.uni; if (r.user) await afterLogin(r.user); } catch { S.me = null; }
+    try { const r = await api('GET', '/api/me'); UA.applySite(r.site ?? { university: r.university }); if (r.user) await afterLogin(r.user); } catch { S.me = null; }
     if (code) { S.view = 'verify'; await doVerify(code); history.replaceState(null, '', location.pathname); }
     render();
   };
