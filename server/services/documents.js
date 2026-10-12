@@ -1,6 +1,5 @@
 import { sha256, hmac, safeEqual, newDocCode } from '../security.js';
 import { HttpError } from '../http.js';
-import { getSite } from './site.js';
 
 // تمثيل قانوني ثابت (مفاتيح مرتبة) كي تكون البصمة مستقرة
 export function canonical(v) {
@@ -14,15 +13,13 @@ const sign = (cfg, hash, code) => hmac(cfg.signingKey, `${hash}|${code}`);
 // التوقيع هنا HMAC بمفتاح الخادم (يثبت أن الجامعة أصدرتها ولم تُعدَّل). الانتقال إلى توقيع PKI/PAdES مُدرج في خارطة الطريق.
 export function issueDocument({ db, cfg }, request, issuer, now) {
   const student = db.prepare('SELECT display_name, student_no, program FROM users WHERE id = ?').get(request.student_id);
-  const svc = db.prepare('SELECT code, label, fields_json FROM service_types WHERE code = ?').get(request.service_code);
-  const fieldLabels = Object.fromEntries(JSON.parse(svc.fields_json).map((f) => [f.name, f.label]));
-  delete svc.fields_json;
+  const svc = db.prepare('SELECT code, label FROM service_types WHERE code = ?').get(request.service_code);
   let code;
   do { code = newDocCode(); } while (db.prepare('SELECT 1 FROM documents WHERE code = ?').get(code));
   const payload = {
-    university: getSite({ db, cfg }).university, code, requestNo: request.no, service: svc,
+    university: cfg.universityName, code, requestNo: request.no, service: svc,
     student: { name: student.display_name, studentNo: student.student_no, program: student.program },
-    details: JSON.parse(request.details_json), fieldLabels, issuedAt: now,
+    details: JSON.parse(request.details_json), issuedAt: now,
   };
   if (svc.code === 'transcript') {
     const grades = db.prepare('SELECT term, course, hours, mark FROM grades WHERE student_id = ? ORDER BY id').all(request.student_id);

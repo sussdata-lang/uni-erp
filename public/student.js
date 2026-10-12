@@ -166,7 +166,7 @@
     await ensureProfile();
     const st = T.profile, p = st ? st.profile : {}, row = (k, v) => (v ? `<div class="m-kv"><small>${k}</small><b>${esc(v)}</b></div>` : '');
     const info = st ? [row('الاسم الأول', p.first_name), row('الاسم الأخير', p.last_name), row('اسم الأب الأول', p.father_name), row('اسم الأم', p.mother_name), row('تاريخ الميلاد', p.birth_date), row('الكلية', st.program.faculty),
-      row('البرنامج', `${st.program.degree} ${st.program.name}`), row('العام الدراسي', st.levelLabel), row('الرقم الوزاري', p.ministerial_no), row('الرقم الجامعي', st.studentNo)].join('')
+      row('البرنامج', st.program.faculty === st.program.name ? st.program.degree : `${st.program.degree} ${st.program.name}`), row('العام الدراسي', st.levelLabel), row('الرقم الوزاري', p.ministerial_no), row('الرقم الجامعي', st.studentNo)].join('')
       : '<p class="hint">لا يوجد ملف شخصي مسجَّل لحسابك بعد. راجع قسم شؤون الطلاب.</p>';
     layer().innerHTML = `<div class="m-drawer-bd" data-act="close"><aside class="m-drawer" dir="rtl" role="dialog" aria-modal="true" aria-label="الملف الشخصي" data-stop="1"><header><div class="m-avatar big"><span>${esc(S.me.name[0])}</span></div><div><b>${esc(S.me.name)}</b><small dir="ltr">${esc((p.email) || S.me.username)}</small></div></header>
       <div class="m-info">${info}</div><nav class="m-acts"><button data-act="cmpopen">${IC.help}<span>إضافة شكوى جديدة</span></button><button data-act="acctopen">${IC.edit}<span>تعديل معلومات الحساب</span></button><button data-act="pwopen">${IC.lock}<span>تعديل كلمة المرور</span></button><button data-act="goverify2">${IC.shield}<span>التحقق من وثيقة</span></button><button class="out" data-act="logout">${IC.out}<span>تسجيل الخروج</span></button></nav></aside></div>`;

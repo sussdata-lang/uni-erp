@@ -1,23 +1,28 @@
+@font-face{font-family:"AL Mohanad";src:url(/fonts/al-mohanad.ttf) format("truetype");font-weight:400 600;font-display:swap}
+@font-face{font-family:"AL Mohanad";src:url(/fonts/AL-Mohanad-Bold-1.ttf) format("truetype");font-weight:700 900;font-display:swap}
 /* Layout: sticky header with role tabs; main area is a two-column workspace (service form + request tracker) that stacks on phones. */
+/* هوية الجامعة السورية للعلوم الأمنية: أخضر داكن (#054239) مع ذهبي. الخط يُستبدل بخط الجامعة بوضع ملفه في /fonts (انظر docs/BRANDING.md). */
 :root{
-  --bg:#EEF1F4; --surface:#FFFFFF; --surface2:#F5F7F9; --line:#D8DEE5;
-  --fg:#14202C; --muted:#5B6877;
-  --accent:#0B6E7F; --accent-fg:#FFFFFF; --accent-soft:#DDF0F3;
+  --bg:#F2F5F2; --surface:#FFFFFF; --surface2:#F6F8F5; --line:#DCE3DD;
+  --fg:#10211D; --muted:#566660;
+  --accent:#054239; --accent-fg:#FFFFFF; --accent-soft:#E2EEE9;
+  --gold:#C9A24B; --gold-2:#E6CB84; --gold-ink:#8A6A1B; --green-d:#032E28; --green-m:#0A5A4D;
   --ok:#1B7F4B; --ok-soft:#DDF3E6; --warn:#9A5600; --warn-soft:#FBEBD0; --bad:#B3261E; --bad-soft:#FBE0DD;
-  --f-ui:"Segoe UI",Tahoma,"Noto Sans Arabic","Noto Naskh Arabic",system-ui,sans-serif;
+  --hero:linear-gradient(135deg,#032E28 0%,#054239 55%,#0A5A4D 100%);
+  --f-ui:"AL Mohanad","Cairo","Tajawal","IBM Plex Sans Arabic","Segoe UI",Tahoma,"Noto Sans Arabic",system-ui,sans-serif;
   --f-doc:"Traditional Arabic","Noto Naskh Arabic","Amiri","Times New Roman",serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0E151C; --surface:#16202A; --surface2:#1B2733; --line:#2A3947;
-    --fg:#E6EDF3; --muted:#98A7B6; --accent:#4FC1D3; --accent-fg:#06222A; --accent-soft:#12323A;
+    --bg:#06201C; --surface:#0B2B25; --surface2:#103832; --line:#1E4840;
+    --fg:#EAF1EE; --muted:#9DB5AE; --accent:#D4AF5A; --accent-fg:#052A24; --accent-soft:#16372F; --gold-ink:#E2C27A;
     --ok:#5CD08F; --ok-soft:#12311F; --warn:#F0B25A; --warn-soft:#3A2A10; --bad:#FF8A80; --bad-soft:#3D1816;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0E151C; --surface:#16202A; --surface2:#1B2733; --line:#2A3947;
-  --fg:#E6EDF3; --muted:#98A7B6; --accent:#4FC1D3; --accent-fg:#06222A; --accent-soft:#12323A;
+  --bg:#06201C; --surface:#0B2B25; --surface2:#103832; --line:#1E4840;
+  --fg:#EAF1EE; --muted:#9DB5AE; --accent:#D4AF5A; --accent-fg:#052A24; --accent-soft:#16372F; --gold-ink:#E2C27A;
   --ok:#5CD08F; --ok-soft:#12311F; --warn:#F0B25A; --warn-soft:#3A2A10; --bad:#FF8A80; --bad-soft:#3D1816;
   color-scheme:dark;
 }
@@ -121,16 +126,16 @@ tr.row:hover td,tr.row[aria-selected="true"] td{background:var(--accent-soft)}
 .sheet{width:min(720px,100%)}
 .sheet-bar{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .doc{background:#FFFFFF;color:#1B1B1B;border-radius:6px;padding:clamp(18px,5vw,42px);font-family:var(--f-doc);font-size:19px;line-height:2;border:1px solid #C9CED4;position:relative}
-.doc h2{font-size:26px;text-align:center;margin-bottom:2px;color:#12304A}
+.doc h2{font-size:26px;text-align:center;margin-bottom:2px;color:#054239}
 .doc .sub{text-align:center;font-size:15px;color:#555;margin-bottom:18px}
-.doc hr{border:0;border-top:2px solid #12304A;margin:10px 0 18px}
+.doc hr{border:0;border-top:2px solid #054239;margin:10px 0 18px}
 .doc table{font-size:16px}
 .doc th{color:#333;border-bottom:1px solid #999}
 .doc td{border-bottom:1px solid #ddd}
 .doc-foot{display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:22px;border-top:1px solid #bbb;padding-top:14px;font-family:var(--f-ui);font-size:12.5px;color:#444}
 .qr{width:112px;height:112px;flex:none;background:#fff;padding:4px;border:1px solid #bbb}
 .qr svg{width:100%;height:100%;display:block}
-.stamp{font-family:var(--f-ui);font-size:12px;border:1px dashed #12304A;color:#12304A;padding:2px 10px;border-radius:4px;display:inline-block}
+.stamp{font-family:var(--f-ui);font-size:12px;border:1px dashed #054239;color:#054239;padding:2px 10px;border-radius:4px;display:inline-block}
 .toast[hidden]{display:none}
 .toast{position:fixed;inset-inline:0;bottom:calc(18px + env(safe-area-inset-bottom,0px));display:grid;place-items:center;z-index:30;pointer-events:none}
 .toast span{background:var(--fg);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:14px}
@@ -175,8 +180,8 @@ input[aria-invalid="true"],select[aria-invalid="true"],textarea[aria-invalid="tr
 .mini-list{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:6px}
 .mini-list li{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 body.is-m{padding-inline:0;padding-block:0}
-.m-app,.m-full,.m-drawer-bd{--accent:#1E3F7A;--accent-fg:#fff;--accent-soft:#E4EBF7;--mline:#DCE2EA}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .m-app,:root:not([data-theme="light"]) .m-full,:root:not([data-theme="light"]) .m-drawer-bd{--accent:#8FB0EC;--accent-fg:#0B1830;--accent-soft:#1B2A45;--mline:#2A3947}}
+.m-app,.m-full,.m-drawer-bd{--accent:#054239;--accent-fg:#fff;--accent-soft:#E2EEE9;--mline:#DCE3DD}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .m-app,:root:not([data-theme="light"]) .m-full,:root:not([data-theme="light"]) .m-drawer-bd{--accent:#D4AF5A;--accent-fg:#052A24;--accent-soft:#16372F;--mline:#1E4840}}
 .m-app{max-width:520px;margin-inline:auto;min-height:100vh;min-height:100dvh;background:var(--surface);position:relative;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));box-shadow:0 0 0 1px var(--line)}
 .m-main{padding:16px 16px 24px}
 .m-head{display:flex;align-items:center;justify-content:space-between;padding:6px 0 14px}
@@ -262,10 +267,109 @@ body.is-m{padding-inline:0;padding-block:0}
 /* في واجهة الطالب يرتفع التنبيه فوق الشريط السفلي كي لا يغطي التنقل */
 body:has(.m-app) .toast{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 
-/* إدارة الخدمات: صفوف الحقول */
-.fld{display:grid;grid-template-columns:2fr 1fr auto 2fr auto;gap:8px;align-items:center;margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:10px}
-.fld label.chk,.chk{display:flex;align-items:center;gap:6px;font-size:13.5px;white-space:nowrap}
-.fld .none{visibility:hidden}
-@media (max-width:760px){.fld{grid-template-columns:1fr 1fr}}
-.cred-box{border:1px dashed var(--line);border-radius:10px;padding:12px;margin:10px 0}
-.chk input[type="checkbox"]{width:auto;padding:0}
+/* =====================================================================
+   طبقة هوية الجامعة السورية للعلوم الأمنية
+   أخضر داكن + ذهبي، رأس بتدرّج، شعار، علامة ◆ كما في موقع الجامعة
+   ===================================================================== */
+body{background-color:var(--bg);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cpath d='M28 22l6 6-6 6-6-6z' fill='%23C9A24B' fill-opacity='.10'/%3E%3C/svg%3E")}
+.crest{display:block;width:auto;height:48px;flex:none}
+.crest.sm{height:34px}.crest.lg{height:96px}
+
+/* الرأس */
+.top{background:var(--hero);color:#fff;border-bottom:3px solid var(--gold);padding-block:12px}
+.top .brand{flex-direction:row;align-items:center;gap:12px}
+.top .brand .t{display:flex;flex-direction:column}
+.top .brand b{color:#fff;font-size:18px;font-weight:800}
+.top .brand span{color:rgba(255,255,255,.78)}
+.top .tabs{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.18)}
+.top .tab{color:rgba(255,255,255,.82)}
+.top .tab:hover{color:#fff}
+.top .tab[aria-selected="true"]{background:var(--gold);color:#04332C;font-weight:700}
+.top .tab:focus-visible,.top .btn:focus-visible{outline-color:var(--gold-2)}
+.top .who{color:rgba(255,255,255,.82)}.top .who b{color:#fff}
+.top .btn{background:transparent;color:#fff;border-color:rgba(230,203,132,.7)}
+.top .btn:hover{background:rgba(255,255,255,.1);border-color:var(--gold-2)}
+
+/* العناصر العامة */
+.card h2::before{content:"◆";color:var(--gold);font-size:.7em;margin-inline-end:8px;vertical-align:.12em}
+.btn.pri{background:var(--accent);border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(1.12)}
+.stat{border-inline-start:4px solid var(--gold)}
+.svc[aria-pressed="true"],.svc:hover{border-color:var(--gold)}
+.svc i{color:var(--gold-ink)}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.checks li::before{content:"◆";font-size:.8em}
+.checks li.x::before{content:"✕"}
+.avatar{background:var(--accent);color:var(--gold-2);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--gold)}
+.link{color:var(--accent)}
+:root[data-theme="dark"] .link,:root[data-theme="dark"] .sec-h{color:var(--gold-2)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .link,:root:not([data-theme="light"]) .sec-h{color:var(--gold-2)}}
+.sec legend .n{background:var(--accent);color:var(--gold-2)}
+tr.row:hover td,tr.row[aria-selected="true"] td{background:var(--accent-soft)}
+th{border-bottom:2px solid var(--gold)}
+
+/* تسجيل الدخول */
+.login{padding:0;overflow:hidden;border-radius:14px;box-shadow:0 12px 34px rgba(3,46,40,.16)}
+.login>*:not(.login-hero){margin-inline:22px}
+.login-hero{background:var(--hero);color:#fff;text-align:center;padding:26px 18px 22px;border-bottom:3px solid var(--gold);display:grid;justify-items:center;gap:8px;margin:0}
+.login-hero .crest{height:96px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+.login-hero h1{font-size:21px;font-weight:800}
+.login-hero .hint{color:rgba(255,255,255,.8)}
+.login>label:first-of-type,.login>.err{margin-top:6px}
+
+/* التذييل */
+body:has(.site-foot){padding-bottom:0}
+.site-foot{margin:36px -16px 0;background:var(--green-d);color:rgba(255,255,255,.82);border-top:3px solid var(--gold);padding:22px 16px;font-size:13px}
+.site-foot .wrap{display:flex;gap:16px 28px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.site-foot .f-brand{display:flex;gap:12px;align-items:center}
+.site-foot b{color:#fff;display:block;font-size:14px}
+.site-foot .gold{color:var(--gold-2)}
+
+/* الوثيقة الرسمية */
+.doc-head{display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:4px}
+.doc-head .crest{height:78px}
+.doc .stamp{border-color:var(--gold);color:#054239}
+.doc hr{border-top:2px solid #054239;border-image:linear-gradient(90deg,transparent,#C9A24B,transparent) 1}
+
+/* واجهة الطالب (تطبيق الجوال) */
+.m-head h1::after{content:"";display:block;width:34px;height:3px;border-radius:2px;background:var(--gold);margin-top:6px}
+.m-hello{background:var(--hero);color:#fff;margin:-16px -16px 16px;padding:22px 16px 20px;border-bottom:3px solid var(--gold);position:relative;overflow:hidden}
+.m-hello::after{content:"";position:absolute;inset-block:0;inset-inline-end:-26px;width:150px;background:url("/brand/crest.svg") center/contain no-repeat;opacity:.13;pointer-events:none}
+.m-hello small{color:rgba(255,255,255,.78)}
+.m-hello b{color:#fff}
+.m-avatar{background:var(--gold);color:#04332C;box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+.m-avatar.big{background:var(--accent);color:var(--gold-2);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--gold)}
+.m-sec h2::before{content:"◆";color:var(--gold);font-size:.62em;margin-inline-end:8px;vertical-align:.18em}
+.m-svc .ic{background:var(--accent);color:var(--gold-2)}
+:root[data-theme="dark"] .m-svc .ic{color:var(--accent-fg)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .m-svc .ic{color:var(--accent-fg)}}
+.m-svc:hover,.m-svc:focus-visible,.m-news-c:hover{border-color:var(--gold)}
+.m-news-c{border-inline-start:4px solid var(--gold)}
+.m-nav{border-top:2px solid var(--gold)}
+.m-nav button[aria-current="page"]{color:var(--accent)}
+.m-nav button[aria-current="page"]::before{content:"";width:22px;height:3px;border-radius:0 0 3px 3px;background:var(--gold);margin-top:-9px;margin-bottom:6px}
+:root[data-theme="dark"] .m-nav button[aria-current="page"]{color:var(--gold-2)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .m-nav button[aria-current="page"]{color:var(--gold-2)}}
+.m-fab{background:var(--gold);color:#04332C}
+.m-chip[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.m-emblem .emblem{height:104px;width:auto;filter:drop-shadow(0 3px 8px rgba(3,46,40,.25))}
+.m-drawer header{background:var(--hero);color:#fff;margin:-18px -18px 0;padding:20px 18px;border-bottom:3px solid var(--gold)}
+.m-drawer header small{color:rgba(255,255,255,.78)}
+.m-ff{border-top:1px solid var(--mline)}
+.m-ff::before{content:"◆ ";color:var(--gold)}
+.m-drawer .m-avatar.big{background:var(--gold);color:#04332C;box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+.top .tab{padding:7px 13px}
+
+/* الحسابات والصلاحيات */
+.perm-g{border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:8px 12px}
+.perm-g legend{font-weight:700;font-size:13.5px;padding:0 6px;color:var(--accent)}
+.perm{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:4px 0;font-weight:500;font-size:14px}
+.perm input{width:auto}.perm.off{opacity:.55}
+.link-list li{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px dashed var(--line)}
+.chk{display:flex;gap:8px;align-items:center;font-weight:500}.chk input{width:auto}
+table.matrix th.mx,table.matrix td.mx{text-align:center;min-width:92px}
+table.matrix td:first-child,table.matrix th:first-child{position:sticky;inset-inline-start:0;background:var(--surface)}
+tr.mx-g td{background:var(--accent-soft);font-weight:700;color:var(--accent)}
+.fwd-box{border:1px dashed var(--gold);border-radius:10px;padding:12px}
+.stack{display:grid;gap:16px}
+.tbl-wrap td .btn{white-space:nowrap}

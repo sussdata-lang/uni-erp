@@ -1,21 +1,24 @@
 import { hashPassword, verifyPassword, newToken, sha256, validatePasswordPolicy } from '../security.js';
 import { audit } from '../audit.js';
 import { HttpError } from '../http.js';
-import { can, PERMISSIONS } from '../permissions.js';
+import { effective, roleLabel } from '../permissions.js';
 
 const MAX_FAILS = 5, LOCK_MS = 15 * 60 * 1000;
 // تجزئة وهمية تُستخدم عند غياب المستخدم كي يتساوى زمن الاستجابة (منع تعداد الحسابات)
 let dummyHash;
 
-export function publicUser(u) {
-  return { id: u.id, username: u.username, name: u.display_name, role: u.role, studentNo: u.student_no, program: u.program, mustChange: !!u.must_change_password, permissions: PERMISSIONS[u.role] ?? [] };
+export function publicUser(db, u) {
+  const unit = u.unit_id ? db.prepare('SELECT id, name FROM org_units WHERE id = ?').get(u.unit_id) : null;
+  return { id: u.id, username: u.username, name: u.display_name, role: u.role, roleKey: u.role_key ?? u.role, roleLabel: roleLabel(db, u), unit,
+    studentNo: u.student_no, program: u.program, mustChange: !!u.must_change_password, permissions: effective(db, u) };
 }
 
 export function sessionUser(db, token) {
   if (!token) return null;
   const row = db.prepare(`SELECT u.*, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`).get(sha256(token));
   if (!row || row.expires_at < Date.now() || !row.active) return null;
-  return { ...row, label: `${row.display_name}`, can: (p) => can(row.role, p) };
+  const perms = new Set(effective(db, row));
+  return { ...row, label: `${row.display_name}`, roleKey: row.role_key ?? row.role, can: (p) => perms.has(p) };
 }
 
 export async function login({ db, cfg, limiter }, { username, password, ip, ua }) {
@@ -41,28 +44,13 @@ export async function login({ db, cfg, limiter }, { username, password, ip, ua }
   const token = newToken(), now = Date.now();
   db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip, user_agent) VALUES (?,?,?,?,?,?)')
     .run(sha256(token), u.id, now, now + cfg.sessionHours * 3600_000, ip, String(ua ?? '').slice(0, 200));
-  audit(db, { id: u.id, label: u.display_name, role: u.role }, 'تسجيل دخول', '', ip);
-  return { token, user: publicUser(u), maxAge: cfg.sessionHours * 3600 };
+  audit(db, { id: u.id, label: u.display_name, role: u.role_key ?? u.role }, 'تسجيل دخول', '', ip);
+  return { token, user: publicUser(db, u), maxAge: cfg.sessionHours * 3600 };
 }
 
 export function logout({ db }, token, user, ip) {
   if (token) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha256(token));
   if (user) audit(db, user, 'تسجيل خروج', '', ip);
-}
-
-export async function createUser({ db, cfg }, actor, input, ip) {
-  const { username, displayName, password, role, studentNo, program } = input ?? {};
-  if (!/^[A-Za-z0-9._-]{3,40}$/.test(username ?? '')) throw new HttpError(400, 'اسم المستخدم: 3-40 حرفاً لاتينياً أو أرقاماً أو . _ -', 'bad_request');
-  if (!displayName || displayName.length > 100) throw new HttpError(400, 'الاسم مطلوب.', 'bad_request');
-  if (!['student', 'staff', 'admin', 'auditor'].includes(role)) throw new HttpError(400, 'دور غير صالح.', 'bad_request');
-  if (role === 'student') throw new HttpError(400, 'يُسجَّل الطلاب من شاشة «تسجيل الطلاب» كي يكتمل ملفهم.', 'bad_request');
-  const bad = validatePasswordPolicy(password);
-  if (bad) throw new HttpError(400, bad, 'weak_password');
-  if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) throw new HttpError(409, 'اسم المستخدم مستخدم مسبقاً.', 'conflict');
-  const r = db.prepare('INSERT INTO users (username, display_name, password_hash, role, student_no, program, created_at) VALUES (?,?,?,?,?,?,?)')
-    .run(username, displayName, await hashPassword(password, cfg.scryptN), role, role === 'student' ? studentNo : null, program ?? null, Date.now());
-  audit(db, actor, `إنشاء مستخدم (${role})`, username, ip);
-  return { id: Number(r.lastInsertRowid) };
 }
 
 // تغيير كلمة المرور (إلزامي بعد كلمة مؤقتة). تُنهى بقية جلسات المستخدم، وتبقى الجلسة الحالية.

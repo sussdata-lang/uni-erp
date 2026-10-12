@@ -22,16 +22,22 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
 
   /* ---------- الحالة ---------- */
-  const S = { uni: '[اسم الجامعة]', title: 'بوابة خدمات الطلاب', dept: 'قسم شؤون الطلاب', me: null, services: [], view: null, requests: [], stats: null, sel: null, filter: 'all', rej: null, svc: null, files: {},
+  const S = { uni: 'الجامعة السورية للعلوم الأمنية', me: null, services: [], view: null, requests: [], stats: null, sel: null, filter: 'all', rej: null, svc: null, files: {},
     vtext: '', vres: null, adminTab: 'holds', admin: {}, audit: null, chain: null, err: '',
     reg: null, stTab: 'requests', stList: { q: '', program: '', status: '', students: [], total: 0 }, stSel: null, stEdit: null, cred: null, fieldErr: null, profile: null, programs: [] };
   const can = (p) => !!S.me && S.me.permissions.includes(p);
   const ROLE_LABEL = { student: 'طالب', staff: 'موظف', admin: 'مدير النظام', auditor: 'مدقق' };
 
-  const STAFF_NAV = [['affairs', 'شؤون الطلاب'], ['academics', 'المواد والعلامات'], ['comms', 'الأخبار والشكاوى']];
   function viewsFor(role) {
     if (role === 'student') return [['home', 'الرئيسية'], ['guide', 'دليل المواد'], ['grades', 'علاماتي'], ['news', 'الأخبار'], ['tx', 'معاملاتي']];
-    const v = { staff: STAFF_NAV, admin: [...STAFF_NAV, ['admin', 'الإدارة'], ['site', 'إدارة الموقع'], ['services', 'إدارة الخدمات'], ['audit', 'التدقيق']], auditor: [['affairs', 'الطلبات'], ['audit', 'التدقيق']] }[role] || [];
+    // قوائم العاملين تُبنى من الصلاحيات الفعلية لا من اسم الدور، فتصلح للأدوار المخصّصة
+    const v = [];
+    if (can('request:read_all') || can('request:read_unit') || can('student:read') || can('student:register')) v.push(['affairs', can('student:read') || can('student:register') ? 'شؤون الطلاب' : 'الطلبات']);
+    if (can('course:manage') || can('grade:manage')) v.push(['academics', 'المواد والعلامات']);
+    if (can('news:manage') || can('complaint:manage')) v.push(['comms', 'الأخبار والشكاوى']);
+    if (can('holds:manage') || can('rules:manage') || can('program:manage')) v.push(['admin', 'الإدارة']);
+    if (can('user:manage') || can('role:manage')) v.push(['access', 'الحسابات والصلاحيات']);
+    if (can('audit:read')) v.push(['audit', 'التدقيق']);
     return [...v, ['verify', 'التحقق العام']];
   }
 
@@ -59,18 +65,19 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
 
   /* ---------- الشاشات ---------- */
   function loginView() {
-    return `<form class="login card" id="loginform"><h1>${esc(S.title)}</h1><div class="hint">${esc(S.uni)} · ${esc(S.dept)}</div>
+    return `<form class="login card" id="loginform"><div class="login-hero"><img class="crest" src="/brand/crest.svg" alt="شعار ${esc(S.uni)}"><h1>بوابة خدمات الطلاب</h1><div class="hint">${esc(S.uni)} · قسم شؤون الطلاب</div></div>
       ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
       <label>اسم المستخدم<input id="lg-u" autocomplete="username" required></label>
       <label>كلمة المرور<input id="lg-p" type="password" autocomplete="current-password" required></label>
       <button class="btn pri" type="submit">دخول</button>
-      <div class="actions" style="margin:0"><button class="btn sm" type="button" data-act="goverify">التحقق من وثيقة (بدون دخول)</button></div></form>`;
+      <div class="actions" style="margin:0 22px 22px"><button class="btn sm" type="button" data-act="goverify">التحقق من وثيقة (بدون دخول)</button></div></form>`;
   }
+  const siteFoot = () => `<footer class="site-foot"><div class="wrap"><div class="f-brand"><img class="crest sm" src="/brand/crest.svg" alt=""><div><b>${esc(S.uni)}</b><span class="gold">وزارة الداخلية · دمشق</span></div></div><div>جميع الحقوق محفوظة للجامعة السورية للعلوم الأمنية © 2026</div></div></footer>`;
   function header() {
     const tabs = viewsFor(S.me?.role ?? 'public').map((t) => `<button class="tab" role="tab" data-act="view" data-v="${t[0]}" aria-selected="${S.view === t[0]}">${t[1]}</button>`).join('');
-    const who = S.me ? `<div class="who"><span><b>${esc(S.me.name)}</b> · ${ROLE_LABEL[S.me.role]}</span><button class="btn sm" data-act="logout">خروج</button></div>`
+    const who = S.me ? `<div class="who"><span><b>${esc(S.me.name)}</b> · ${esc(S.me.roleLabel || ROLE_LABEL[S.me.role])}${S.me.unit ? ` · ${esc(S.me.unit.name)}` : ''}</span><button class="btn sm" data-act="logout">خروج</button></div>`
       : '<div class="who"><button class="btn sm" data-act="tologin">تسجيل الدخول</button></div>';
-    return `<header class="top"><div class="wrap"><div class="brand"><b>${esc(S.title)}</b><span>${esc(S.uni)} · ${esc(S.dept)}</span></div>
+    return `<header class="top"><div class="wrap"><div class="brand"><img class="crest" src="/brand/crest.svg" alt="" width="40" height="48"><div class="t"><b>بوابة خدمات الطلاب</b><span>${esc(S.uni)} · قسم شؤون الطلاب</span></div></div>
       <div class="tabs" role="tablist">${tabs}</div>${who}</div></header><div class="wrap" style="padding-top:16px">`;
   }
 
@@ -92,7 +99,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const fl = [['all', 'الكل'], ['review', 'قيد المراجعة'], ['approved', 'معتمدة'], ['rejected', 'مرفوضة']];
     const list = S.requests.filter((r) => S.filter === 'all' || r.status === S.filter);
     const sel = S.requests.find((r) => r.id === S.sel);
-    const rows = list.map((r) => `<tr class="row" tabindex="0" data-act="sel" data-id="${r.id}" aria-selected="${S.sel === r.id}"><td>${esc(r.service.label)}</td><td>${esc(r.student.name)}</td><td>${pill(r)}</td><td class="hint" style="white-space:nowrap">${fmt(r.createdAt)}</td></tr>`).join('');
+    const rows = list.map((r) => `<tr class="row" tabindex="0" data-act="sel" data-id="${r.id}" aria-selected="${S.sel === r.id}"><td>${esc(r.service.label)}${r.unit ? `<div class="small">عند: ${esc(r.unit.name)}</div>` : ''}</td><td>${esc(r.student.name)}</td><td>${pill(r)}</td><td class="hint" style="white-space:nowrap">${fmt(r.createdAt)}</td></tr>`).join('');
     return `<div class="grid2"><section class="card"><h2>طابور الطلبات</h2><div class="chips">${fl.map((f) => `<button class="chip" data-act="flt" data-f="${f[0]}" aria-pressed="${S.filter === f[0]}">${f[1]}</button>`).join('')}</div>
       <div class="tbl-wrap"><table><thead><tr><th>الخدمة</th><th>الطالب</th><th>الحالة</th><th>التاريخ</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">لا طلبات في هذا التصنيف.</td></tr>'}</tbody></table></div></section>
       <section class="card"><h2>تفاصيل الطلب</h2>${sel ? staffDetail(sel, canDecide) : '<div class="empty">اختر طلباً من الطابور.</div>'}</section></div>`;
@@ -104,32 +111,41 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       act = `<div class="actions"><button class="btn ok" data-act="approve" data-id="${r.id}">اعتماد وإصدار الوثيقة</button><button class="btn bad" data-act="rejform" data-id="${r.id}">رفض</button></div>` +
         (S.rej === r.id ? `<div class="form" style="margin-top:12px"><label>سبب الرفض (يظهر للطالب)<textarea id="rej-text" rows="2" maxlength="300"></textarea></label><div class="actions" style="margin:0"><button class="btn bad" data-act="reject" data-id="${r.id}">تأكيد الرفض</button></div></div>` : '');
     } else if (r.document) act = `<div class="actions"><button class="btn pri" data-act="doc" data-c="${esc(r.document.code)}">عرض الوثيقة</button></div>`;
+    if (r.status === 'review' && can('request:forward') && (S.targets || []).length) {
+      const opts = S.targets.filter((t) => !r.unit || t.id !== r.unit.id);
+      if (opts.length) act += `<div class="form fwd-box" style="margin-top:12px"><b>إحالة الطلب إلى وحدة مرتبطة</b><label>الوحدة<select id="fw-unit">${opts.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label>
+        <label>ملاحظة للجهة المستلمة (اختياري)<input id="fw-note" maxlength="300"></label><div class="actions" style="margin:0"><button class="btn" data-act="fwd" data-id="${r.id}">إحالة</button></div></div>`;
+    }
     else if (r.status === 'rejected') act = `<div class="reason" style="margin-top:8px">${esc(r.rejectReason)}</div>`;
     const att = r.attachment ? `<dt>المرفق</dt><dd><a href="/api/attachments/${r.attachment.id}">${esc(r.attachment.name)}</a> <span class="small">(${Math.round(r.attachment.size / 1024)} ك.ب)</span></dd>` : '';
-    return `<dl class="kv"><dt>الطلب</dt><dd>${esc(r.service.label)} <span class="no">${esc(r.no)}</span></dd><dt>الطالب</dt><dd>${esc(r.student.name)} · ${esc(r.student.studentNo)}${can('student:read') && r.student.id ? ` <button class="link" data-act="openstud" data-id="${r.student.id}">فتح ملف الطالب</button>` : ''}</dd><dt>التفاصيل</dt><dd>${esc(detailsText(r))}</dd><dt>الحالة</dt><dd>${pill(r)}</dd>${r.decidedAt ? `<dt>زمن المعالجة</dt><dd>${dur(r.decidedAt - r.createdAt)}</dd>` : ''}${att}</dl>
+    return `<dl class="kv"><dt>الطلب</dt><dd>${esc(r.service.label)} <span class="no">${esc(r.no)}</span></dd><dt>الطالب</dt><dd>${esc(r.student.name)} · ${esc(r.student.studentNo)}${can('student:read') && r.student.id ? ` <button class="link" data-act="openstud" data-id="${r.student.id}">فتح ملف الطالب</button>` : ''}</dd><dt>التفاصيل</dt><dd>${esc(detailsText(r))}</dd><dt>الحالة</dt><dd>${pill(r)}</dd><dt>الجهة الحالية</dt><dd>${r.unit ? esc(r.unit.name) : '<span class="hint">غير محال</span>'}</dd>${r.decidedAt ? `<dt>زمن المعالجة</dt><dd>${dur(r.decidedAt - r.createdAt)}</dd>` : ''}${att}</dl>
       <b style="display:block;margin-top:12px;font-size:14px">الفحص الآلي</b><ul class="checks"><li class="${auto ? 'x' : ''}">${auto ? esc(r.rejectReason) : 'اجتاز كل القواعد المفعَّلة'}</li></ul>${act}<div style="margin-top:12px">${events(r)}</div>`;
   }
 
   function adminView() {
-    const tabs = [['holds', 'الذمم والموانع'], ['rules', 'قواعد الفحص الآلي'], ['programs', 'البرامج الأكاديمية']];
+    const tabs = [['holds', 'الذمم والموانع', can('holds:manage')], ['rules', 'قواعد الفحص الآلي', can('rules:manage')], ['programs', 'الكليات والبرامج', can('program:manage')]].filter((t) => t[2]);
+    if (!tabs.some((t) => t[0] === S.adminTab)) S.adminTab = tabs[0] ? tabs[0][0] : 'holds';
     const bar = `<div class="sub-tabs">${tabs.map((t) => `<button class="chip" data-act="atab" data-t="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}</button>`).join('')}</div>`;
     const a = S.admin;
     if (S.adminTab === 'holds') {
-      return bar + `<section class="card"><h2>تسجيل ذمة على طالب</h2><div class="inline-form"><label>الرقم الجامعي<input id="h-no" placeholder="2024-0000"></label>
+      return bar + `<section class="card"><h2>تسجيل ذمة على طالب</h2><div class="inline-form"><label>الرقم الجامعي<input id="h-no" placeholder="CSS-2026-0001" dir="ltr"></label>
         <label>النوع<select id="h-type"><option value="financial">مالية</option><option value="disciplinary">تأديبية</option><option value="library">مكتبة</option></select></label><label>ملاحظة<input id="h-note" maxlength="200"></label><button class="btn pri" data-act="addhold">تسجيل</button></div></section>
         <section class="card" style="margin-top:16px"><h2>الذمم</h2><div class="tbl-wrap"><table><thead><tr><th>الطالب</th><th>النوع</th><th>الملاحظة</th><th>الحالة</th><th></th></tr></thead><tbody>${(a.holds || []).map((h) => `<tr><td>${esc(h.student)} <span class="small">${esc(h.studentNo)}</span></td><td>${{ financial: 'مالية', disciplinary: 'تأديبية', library: 'مكتبة' }[h.holdType]}</td><td>${esc(h.note)}</td><td>${h.active ? '<span class="bad-t">قائمة</span>' : '<span class="ok-t">مسددة</span>'}</td><td>${h.active ? `<button class="btn sm" data-act="clearhold" data-id="${h.id}">تسوية</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">لا ذمم مسجلة.</td></tr>'}</tbody></table></div></section>`;
     }
     if (S.adminTab === 'rules') {
       return bar + `<section class="card"><h2>قواعد الفحص الآلي</h2><p class="hint">تُطبَّق على كل طلب قبل وصوله للموظف. التعطيل والتفعيل يُسجَّلان في سجل التدقيق.</p><div class="tbl-wrap"><table><thead><tr><th>القاعدة</th><th>الخدمة</th><th>رسالة الرفض</th><th></th></tr></thead><tbody>${(a.rules || []).map((r) => `<tr><td class="mono">${esc(r.kind)} ${esc(r.params)}</td><td>${esc(r.service ?? 'كل الخدمات')}</td><td>${esc(r.message)}</td><td><button class="btn sm" data-act="rule" data-id="${r.id}" data-on="${r.enabled ? 0 : 1}">${r.enabled ? 'تعطيل' : 'تفعيل'}</button></td></tr>`).join('')}</tbody></table></div></section>`;
     }
-    if (S.adminTab === 'programs') {
-      return bar + `<section class="card"><h2>برنامج أكاديمي جديد</h2><div class="inline-form"><label>الكلية<input id="pg-fac" maxlength="80"></label><label>البرنامج<input id="pg-name" maxlength="80"></label><label>الدرجة<input id="pg-deg" value="بكالوريوس" maxlength="30"></label>
+    const KIND = { college: 'كلية', institute: 'معهد', center: 'مركز' };
+    const facs = a.faculties || [];
+    return bar + `<section class="card"><h2>الكليات والمعاهد والمراكز</h2><p class="hint">الرمز اللاتيني (الأحرف الأولى من الاسم الإنكليزي) يبدأ به اسم المستخدم والرقم الجامعي للطلاب الجدد، مثل <span class="mono" dir="ltr">CSS-2026-0001</span>. الطلاب الحاليون يحتفظون بأرقامهم.</p>
+      <div class="tbl-wrap"><table><thead><tr><th>الجهة</th><th>الاسم الإنكليزي</th><th>الرمز</th><th>البرامج</th><th>الطلاب</th><th></th></tr></thead><tbody>${facs.map((f) => `<tr><td>${esc(f.name)} <span class="small">(${KIND[f.kind]})</span></td><td dir="ltr" style="text-align:right">${esc(f.nameEn)}</td><td class="mono">${esc(f.code)}</td><td>${f.programs}</td><td>${f.students}</td>
+        <td><button class="btn sm" data-act="factoggle" data-id="${f.id}" data-on="${f.active ? 0 : 1}">${f.active ? 'تعطيل' : 'تفعيل'}</button></td></tr>`).join('')}</tbody></table></div></section>
+      <section class="card" style="margin-top:16px"><h2>إضافة جهة</h2><div class="inline-form"><label>الاسم بالعربية<input id="fc-name" maxlength="80"></label><label>الاسم بالإنكليزية<input id="fc-en" maxlength="100" dir="ltr" placeholder="College of ..."></label>
+        <label>الرمز (اختياري)<input id="fc-code" maxlength="8" dir="ltr" placeholder="يُولَّد تلقائياً"></label><label>النوع<select id="fc-kind"><option value="college">كلية</option><option value="institute">معهد</option><option value="center">مركز</option></select></label><button class="btn pri" data-act="addfac">إضافة</button></div>
+        <p class="small">تُنشأ للجهة الجديدة برنامج أساسي يحمل اسمها، ويمكن إضافة برامج أخرى تحتها.</p></section>
+      <section class="card" style="margin-top:16px"><h2>برنامج أكاديمي جديد</h2><div class="inline-form"><label>الكلية / المعهد<select id="pg-fac">${facs.filter((f) => f.active).map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select></label><label>البرنامج<input id="pg-name" maxlength="80"></label><label>الدرجة<input id="pg-deg" value="بكالوريوس" maxlength="30"></label>
         <label>المدة (سنوات)<input id="pg-years" type="number" min="1" max="7" value="4"></label><button class="btn pri" data-act="addprog">إضافة</button></div><p class="small">البرامج المعطَّلة تختفي من نموذج التسجيل، ويبقى الطلاب المسجَّلون فيها.</p></section>
-        <section class="card" style="margin-top:16px"><h2>البرامج</h2><div class="tbl-wrap"><table><thead><tr><th>الكلية</th><th>البرنامج</th><th>المدة</th><th>الطلاب</th><th></th></tr></thead><tbody>${(a.programs || []).map((p) => `<tr><td>${esc(p.faculty)}</td><td>${esc(p.degree)} ${esc(p.name)}</td><td>${p.years}</td><td>${p.students}</td><td><button class="btn sm" data-act="progtoggle" data-id="${p.id}" data-on="${p.active ? 0 : 1}">${p.active ? 'تعطيل' : 'تفعيل'}</button></td></tr>`).join('')}</tbody></table></div></section>`;
-    }
-    return bar + `<section class="card"><h2>مستخدم جديد</h2><div class="inline-form"><label>اسم المستخدم<input id="u-name" autocomplete="off"></label><label>الاسم الكامل<input id="u-disp"></label>
-      <label>الدور<select id="u-role"><option value="staff">موظف</option><option value="auditor">مدقق</option><option value="admin">مدير</option></select></label><label>كلمة مرور مؤقتة<input id="u-pw" type="password" autocomplete="new-password"></label><button class="btn pri" data-act="adduser">إنشاء</button></div><p class="small">10 أحرف على الأقل وتحوي حروفاً وأرقاماً.</p></section>
-      <section class="card" style="margin-top:16px"><h2>المستخدمون</h2><div class="tbl-wrap"><table><thead><tr><th>المستخدم</th><th>الاسم</th><th>الدور</th><th>الرقم الجامعي</th></tr></thead><tbody>${(a.users || []).map((u) => `<tr><td class="mono">${esc(u.username)}</td><td>${esc(u.name)}</td><td>${ROLE_LABEL[u.role]}</td><td>${esc(u.studentNo ?? '')}</td></tr>`).join('')}</tbody></table></div></section>`;
+      <section class="card" style="margin-top:16px"><h2>البرامج</h2><div class="tbl-wrap"><table><thead><tr><th>الجهة</th><th>البرنامج</th><th>المدة</th><th>الطلاب</th><th></th></tr></thead><tbody>${(a.programs || []).map((p) => `<tr${p.active ? '' : ' style="opacity:.55"'}><td>${esc(p.faculty)}${p.facultyCode ? ` <span class="mono small">${esc(p.facultyCode)}</span>` : ''}</td><td>${p.faculty === p.name ? esc(p.degree) : `${esc(p.degree)} ${esc(p.name)}`}</td><td>${p.years}</td><td>${p.students}</td><td><button class="btn sm" data-act="progtoggle" data-id="${p.id}" data-on="${p.active ? 0 : 1}">${p.active ? 'تعطيل' : 'تفعيل'}</button></td></tr>`).join('')}</tbody></table></div></section>`;
   }
 
 
@@ -184,7 +200,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     if (S.stTab === 'new') return bar + (S.cred ? credCard() : `<section class="card"><h2>تسجيل طالب جديد</h2>${studentForm(S.newVals || {}, false)}</section>`);
     if (S.stTab === 'edit' && S.stEdit) return bar + `<section class="card"><h2>تعديل ملف: ${esc(S.stEdit.name)} <span class="mono small">${esc(S.stEdit.studentNo)}</span></h2>${studentForm(S.stEdit.profile, true)}</section>`;
     const L = S.stList, progOpts = S.reg.sections.flatMap((x) => x.fields).find((f) => f.name === 'program_id').options;
-    const rows = L.students.map((st) => `<tr class="row" tabindex="0" data-act="stsel" data-id="${st.id}" aria-selected="${S.stSel && S.stSel.id === st.id}"><td class="mono">${esc(st.studentNo)}</td><td>${esc(st.name)}</td><td class="hint">${esc(st.program.name)} · ${esc(st.levelLabel)}</td><td>${spill(st.status, st.statusLabel)}</td></tr>`).join('');
+    const rows = L.students.map((st) => `<tr class="row" tabindex="0" data-act="stsel" data-id="${st.id}" aria-selected="${S.stSel && S.stSel.id === st.id}"><td class="mono">${esc(st.studentNo)}</td><td>${esc(st.name)}</td><td class="hint">${esc(st.program.label || st.program.name)} · ${esc(st.levelLabel)}</td><td>${spill(st.status, st.statusLabel)}</td></tr>`).join('');
     return bar + `<div class="grid2"><section class="card"><h2>سجل الطلاب <span class="small">(${L.total})</span></h2>
       <form class="inline-form" id="stsearch"><label>بحث<input id="st-q" value="${esc(L.q)}" placeholder="اسم، رقم جامعي، رقم وطني، هاتف" maxlength="60"></label>
         <label>البرنامج<select id="st-prog"><option value="">الكل</option>${progOpts.map((o) => `<option value="${o.v}"${String(o.v) === String(L.program) ? ' selected' : ''}>${esc(o.l)}</option>`).join('')}</select></label>
@@ -199,7 +215,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const lab = (n) => (F[n] ? F[n].label : n);
     return S.profSections.map((sec) => `<h3 class="sec-h">${esc(sec.title)}</h3><dl class="kv">${sec.fields.map((f) => {
       if (f.name === 'status') return kvrow(lab('status'), st.statusLabel);
-      if (f.name === 'program_id') return kvrow('الكلية والبرنامج', `${st.program.faculty} — ${st.program.degree} ${st.program.name}`);
+      if (f.name === 'program_id') return kvrow('الكلية والبرنامج', st.program.label);
       if (f.name === 'study_level') return kvrow(lab('study_level'), st.levelLabel);
       return kvrow(lab(f.name), p[f.name]);
     }).join('')}${sec.id === 'certificate' && st.hsPercent !== null ? kvrow('النسبة المئوية', st.hsPercent + '%') : ''}</dl>`).join('');
@@ -241,11 +257,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     if (p.service.code === 'transcript') body = `<p>كشف علامات الطالب/ـة ${who}:</p><table><thead><tr><th>المقرر</th><th>الفصل</th><th>الساعات</th><th>العلامة</th></tr></thead><tbody>${p.transcript.grades.map((g) => `<tr><td>${esc(g.course)}</td><td>${esc(g.term)}</td><td>${g.hours}</td><td>${g.mark}</td></tr>`).join('')}</tbody></table><p style="margin-bottom:0">المعدل المرجَّح: ${p.transcript.average ?? '-'} من 100.</p>`;
     if (p.service.code === 'excellence_year') body = `<p>تشهد ${esc(p.university)} بأنه تقرر قبول تسجيل الطالب/ـة ${who}، المقيَّد/ـة في برنامج «${esc(st.program)}»، في سنة الامتياز للعام الدراسي ${esc(p.details.academic_year)}.</p>${p.details.notes ? `<p>ملاحظات: ${esc(p.details.notes)}</p>` : ''}`;
     if (p.service.code === 'excuse') body = `<p>بعد مراجعة المرفقات والتحقق من استيفائها للمدة النظامية، تقرر قبول العذر المقدَّم من الطالب/ـة ${who} عن امتحان مقرر «${esc(p.details.course)}» بتاريخ ${esc(p.details.exam_date)} (السبب: ${esc(p.details.reason)})، وتحديد موعد امتحان بديل.</p>`;
-    if (!body) {
-      const L = p.fieldLabels || {}, rows = Object.entries(p.details || {}).map(([k, v]) => `<tr><td>${esc(L[k] || k)}</td><td>${esc(v)}</td></tr>`).join('');
-      body = `<p>تشهد ${esc(p.university)} بأن الطالب/ـة ${who}، المقيَّد/ـة في برنامج «${esc(st.program)}»، قدّم/ـت طلب «${esc(p.service.label)}»، وقد تمت الموافقة عليه.</p>${rows ? `<table><tbody>${rows}</tbody></table>` : ''}`;
-    }
-    return `<div class="doc"><h2>${esc(p.university)}</h2><div class="sub">${esc(S.dept)} · ${esc(p.service.label)}</div><hr>${body}
+    return `<div class="doc"><div class="doc-head"><img class="crest" src="/brand/crest.svg" alt=""><h2>${esc(p.university)}</h2></div><div class="sub">قسم شؤون الطلاب · ${esc(p.service.label)}</div><hr>${body}
       <div class="doc-foot"><div><span class="stamp">موقّعة رقمياً</span><div style="margin-top:8px">رقم الطلب: <span class="mono">${esc(p.requestNo)}</span></div><div>تاريخ الإصدار: ${fmt(p.issuedAt)}</div><div>رمز التحقق: <span class="mono">${esc(d.code)}</span></div><div>البصمة: <span class="mono">${esc(d.hash.slice(0, 20))}…</span></div></div><div class="qr"><img alt="رمز QR للتحقق" src="/api/documents/${encodeURIComponent(d.code)}/qr.svg"></div></div></div>`;
   }
 
@@ -254,11 +266,11 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   function render() {
     const app = $('#app');
     document.body.classList.toggle('is-m', !!(S.me && S.me.role === 'student' && !S.me.mustChange));
-    if (!S.me && S.view !== 'verify') { app.innerHTML = loginView(); return; }
+    if (!S.me && S.view !== 'verify') { app.innerHTML = loginView() + siteFoot(); return; }
     if (S.me && S.me.mustChange) { app.innerHTML = mustChangeView(); return; }
     if (S.me && S.me.role === 'student') { app.innerHTML = UA.studentShell(); return; }
     const v = S.view === 'verify' ? verifyView : (UA.views[S.view] || BUILTIN[S.view] || (() => ''));
-    app.innerHTML = header() + '<main>' + v() + '</main></div>';
+    app.innerHTML = header() + '<main>' + v() + '</main></div>' + siteFoot();
   }
   async function loadFor(view) {
     if (!S.me) return;
@@ -267,11 +279,13 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (view === 'affairs') {
         const [r, st] = await Promise.all([api('GET', '/api/requests'), can('stats:read') ? api('GET', '/api/stats') : Promise.resolve(null)]);
         S.requests = r.requests; S.stats = st && st.stats;
+        S.targets = can('request:forward') ? (await api('GET', '/api/units/targets')).targets : [];
         if (can('student:register') && !S.reg) { S.reg = await api('GET', '/api/registration/options'); S.profSections = S.reg.sections; }
         if (can('student:read')) await loadStudents();
       } else if (view === 'admin') {
-        const [h, r, u, pg] = await Promise.all([api('GET', '/api/admin/holds'), api('GET', '/api/admin/rules'), api('GET', '/api/admin/users'), api('GET', '/api/programs')]);
-        S.admin = { holds: h.holds, rules: r.rules, users: u.users, programs: pg.programs };
+        const g = (perm, url, key) => (can(perm) ? api('GET', url).then((x) => x[key]) : Promise.resolve([]));
+        const [holds, rules, pg, fc] = await Promise.all([g('holds:manage', '/api/admin/holds', 'holds'), g('rules:manage', '/api/admin/rules', 'rules'), g('program:manage', '/api/programs', 'programs'), g('program:manage', '/api/faculties', 'faculties')]);
+        S.admin = { holds, rules, programs: pg, faculties: fc };
       } else if (view === 'audit') S.audit = (await api('GET', '/api/audit?limit=100')).entries;
     } catch (e) { if (e.status !== 401) toast(e.message); }
   }
@@ -366,10 +380,6 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (a === 'addhold') { await api('POST', '/api/admin/holds', { studentNo: val('h-no'), holdType: val('h-type'), note: val('h-note') }); await loadFor('admin'); render(); toast('سُجّلت الذمة'); }
       else if (a === 'clearhold') { await api('POST', `/api/admin/holds/${d.id}/clear`, {}); await loadFor('admin'); render(); toast('تمت التسوية'); }
       else if (a === 'rule') { await api('POST', `/api/admin/rules/${d.id}/toggle`, { enabled: d.on === '1' }); await loadFor('admin'); render(); }
-      else if (a === 'adduser') {
-        await api('POST', '/api/admin/users', { username: val('u-name'), displayName: val('u-disp'), role: val('u-role'), password: val('u-pw') });
-        await loadFor('admin'); render(); toast('أُنشئ المستخدم');
-      }
       else if (a === 'sttab') { S.stTab = d.t; S.err = ''; S.fieldErr = null; S.stEdit = null; if (d.t === 'list') await loadStudents(); render(); }
       else if (a === 'stsel') { S.stSel = (await api('GET', '/api/students/' + d.id)).student; render(); }
       else if (a === 'stedit') { S.stEdit = S.stSel; S.stTab = 'edit'; S.err = ''; S.fieldErr = null; render(); window.scrollTo(0, 0); }
@@ -384,7 +394,10 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (a === 'credprint') window.print();
       else if (a === 'credopen') { const id = S.cred.id; S.cred = null; S.stTab = 'list'; S.stSel = (await api('GET', '/api/students/' + id)).student; await loadStudents(); render(); }
       else if (a === 'crednew') { S.cred = null; S.newVals = {}; render(); }
-      else if (a === 'addprog') { await api('POST', '/api/admin/programs', { faculty: val('pg-fac'), name: val('pg-name'), degree: val('pg-deg'), years: Number(val('pg-years')) }); S.reg = null; await loadFor('admin'); render(); toast('أُضيف البرنامج'); }
+      else if (a === 'addfac') { const r = await api('POST', '/api/admin/faculties', { name: val('fc-name'), nameEn: val('fc-en'), code: val('fc-code'), kind: val('fc-kind') }); S.reg = null; await loadFor('admin'); render(); toast('أُضيفت الجهة، رمزها ' + r.code); }
+      else if (a === 'factoggle') { await api('POST', `/api/admin/faculties/${d.id}/toggle`, { enabled: d.on === '1' }); S.reg = null; await loadFor('admin'); render(); }
+      else if (a === 'fwd') { await api('POST', `/api/requests/${d.id}/forward`, { unitId: Number(val('fw-unit')), note: val('fw-note') }); await loadFor('affairs'); render(); toast('أُحيل الطلب'); }
+      else if (a === 'addprog') { await api('POST', '/api/admin/programs', { facultyId: Number(val('pg-fac')), name: val('pg-name'), degree: val('pg-deg'), years: Number(val('pg-years')) }); S.reg = null; await loadFor('admin'); render(); toast('أُضيف البرنامج'); }
       else if (a === 'progtoggle') { await api('POST', `/api/admin/programs/${d.id}/toggle`, { enabled: d.on === '1' }); S.reg = null; await loadFor('admin'); render(); }
       else if (a === 'reqopen') { S.stTab = 'requests'; S.sel = Number(d.id); S.rej = null; render(); window.scrollTo(0, 0); }
       else if (a === 'openstud') { S.stSel = (await api('GET', '/api/students/' + d.id)).student; S.stTab = 'list'; render(); window.scrollTo(0, 0); }
@@ -397,14 +410,9 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   });
 
   /* ---------- الإقلاع ---------- */
-  UA.applySite = (x) => {
-    if (!x) return;
-    S.uni = x.university || S.uni; S.title = x.title || S.title; S.dept = x.department || S.dept;
-    document.title = S.title;
-  };
   UA.start = async function start() {
     const params = new URLSearchParams(location.search), code = params.get('verify');
-    try { const r = await api('GET', '/api/me'); UA.applySite(r.site ?? { university: r.university }); if (r.user) await afterLogin(r.user); } catch { S.me = null; }
+    try { const r = await api('GET', '/api/me'); S.uni = r.university ?? S.uni; if (r.user) await afterLogin(r.user); } catch { S.me = null; }
     if (code) { S.view = 'verify'; await doVerify(code); history.replaceState(null, '', location.pathname); }
     render();
   };

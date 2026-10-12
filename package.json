@@ -1,13 +1,16 @@
 {
   "name": "uni-erp-core",
   "version": "0.1.0",
-  "description": "نواة منظومة ERP جامعية - المرحلة 1: الهوية والصلاحيات وخدمات شؤون الطلاب",
+  "description": "نواة منظومة ERP جامعية - الجامعة السورية للعلوم الأمنية: الهوية والصلاحيات وخدمات شؤون الطلاب",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
-    "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.js\""
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.js\"",
+    "accounts": "node --disable-warning=ExperimentalWarning scripts/accounts.js"
   }
 }

@@ -19,21 +19,21 @@ const mk = (id, role, label, extra = {}) => ({ id, role, label, can: (p) => can(
 db.prepare("INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES ('staff','م. الأحمد','x','staff',?)").run(Date.now());
 const staff = mk(1, 'staff', 'م. الأحمد');
 
-const progs = listPrograms(db), P = (n) => progs.find((p) => p.name.includes(n)).id;
+const progs = listPrograms(db), P = (n) => progs.find((p) => p.faculty === n).id;
 // بيانات خيالية بالكامل (أسماء وأرقام وطنية وهواتف لا تعود لأشخاص حقيقيين)
 const base = { nationality: 'سورية', hs_type: 'الثانوية العامة - الفرع العلمي', hs_max: 2400, admission_type: 'القبول العام (المفاضلة)', enroll_term: 'الفصل الأول', status: 'active', hs_governorate: 'دمشق', guardian_relation: 'الأب' };
 const people = [
-  { first_name: 'سارة', father_name: 'أحمد', grandfather_name: 'محمود', last_name: 'العلي', mother_name: 'ريما', national_id: '01000000011', gender: 'أنثى', birth_date: '2006-03-15', birth_place: 'دمشق', phone: '0933000011', email: 'sara.demo@example.com', governorate: 'دمشق', city: 'المزة', address: 'شارع الجلاء، بناء 4', hs_year: 2024, hs_score: 2100, program: 'الأمن السيبراني', enroll_year: 2024, study_level: 2, guardian_name: 'أحمد العلي', guardian_phone: '0944000011', ministerial_no: '10011' },
-  { first_name: 'عمر', father_name: 'خالد', last_name: 'الحمصي', mother_name: 'هدى', national_id: '01000000022', gender: 'ذكر', birth_date: '2005-09-02', birth_place: 'حمص', phone: '0933000022', governorate: 'حمص', city: 'الإنشاءات', address: 'قرب الحديقة العامة', hs_year: 2023, hs_score: 2250, program: 'هندسة البرمجيات', enroll_year: 2023, study_level: 3, guardian_name: 'خالد الحمصي', guardian_phone: '0944000022' },
-  { first_name: 'نور', father_name: 'سامر', last_name: 'الشامي', mother_name: 'لينا', national_id: '01000000033', gender: 'أنثى', birth_date: '2006-12-20', birth_place: 'حلب', phone: '0933000033', governorate: 'حلب', city: 'الفرقان', address: 'شارع الملعب', hs_year: 2024, hs_score: 1980, program: 'إدارة الأعمال', enroll_year: 2024, study_level: 1, guardian_name: 'لينا الشامي', guardian_relation: 'الأم', guardian_phone: '0944000033' },
-  { first_name: 'يوسف', father_name: 'مروان', grandfather_name: 'سليم', last_name: 'درويش', mother_name: 'سلمى', national_id: '01000000044', gender: 'ذكر', birth_date: '2004-05-30', birth_place: 'اللاذقية', phone: '0933000044', governorate: 'اللاذقية', city: 'الزراعة', address: 'حي الأميركان', hs_year: 2022, hs_score: 2310, program: 'الذكاء الاصطناعي', enroll_year: 2022, study_level: 4, guardian_name: 'مروان درويش', guardian_phone: '0944000044' },
-  { first_name: 'ريم', father_name: 'فادي', last_name: 'الخطيب', mother_name: 'منى', national_id: '01000000055', gender: 'أنثى', birth_date: '2006-01-11', birth_place: 'دمشق', phone: '0933000055', governorate: 'ريف دمشق', city: 'جرمانا', address: 'قرب المشفى الوطني', hs_year: 2024, hs_score: 2050, program: 'المحاسبة', enroll_year: 2024, study_level: 2, guardian_name: 'فادي الخطيب', guardian_phone: '0944000055' },
+  { first_name: 'سارة', father_name: 'أحمد', grandfather_name: 'محمود', last_name: 'العلي', mother_name: 'ريما', national_id: '01000000011', gender: 'أنثى', birth_date: '2006-03-15', birth_place: 'دمشق', phone: '0933000011', email: 'sara.demo@example.com', governorate: 'دمشق', city: 'المزة', address: 'شارع الجلاء، بناء 4', hs_year: 2024, hs_score: 2100, program: 'كلية الأمن السيبراني', enroll_year: 2024, study_level: 2, guardian_name: 'أحمد العلي', guardian_phone: '0944000011', ministerial_no: '10011' },
+  { first_name: 'عمر', father_name: 'خالد', last_name: 'الحمصي', mother_name: 'هدى', national_id: '01000000022', gender: 'ذكر', birth_date: '2005-09-02', birth_place: 'حمص', phone: '0933000022', governorate: 'حمص', city: 'الإنشاءات', address: 'قرب الحديقة العامة', hs_year: 2023, hs_score: 2250, program: 'كلية العلوم الأمنية', enroll_year: 2023, study_level: 3, guardian_name: 'خالد الحمصي', guardian_phone: '0944000022' },
+  { first_name: 'نور', father_name: 'سامر', last_name: 'الشامي', mother_name: 'لينا', national_id: '01000000033', gender: 'أنثى', birth_date: '2006-12-20', birth_place: 'حلب', phone: '0933000033', governorate: 'حلب', city: 'الفرقان', address: 'شارع الملعب', hs_year: 2024, hs_score: 1980, program: 'المعهد العالي للعلوم الأمنية', enroll_year: 2024, study_level: 1, guardian_name: 'لينا الشامي', guardian_relation: 'الأم', guardian_phone: '0944000033' },
+  { first_name: 'يوسف', father_name: 'مروان', grandfather_name: 'سليم', last_name: 'درويش', mother_name: 'سلمى', national_id: '01000000044', gender: 'ذكر', birth_date: '2004-05-30', birth_place: 'اللاذقية', phone: '0933000044', governorate: 'اللاذقية', city: 'الزراعة', address: 'حي الأميركان', hs_year: 2022, hs_score: 2310, program: 'كلية العلوم الأمنية', enroll_year: 2022, study_level: 4, guardian_name: 'مروان درويش', guardian_phone: '0944000044' },
+  { first_name: 'ريم', father_name: 'فادي', last_name: 'الخطيب', mother_name: 'منى', national_id: '01000000055', gender: 'أنثى', birth_date: '2006-01-11', birth_place: 'دمشق', phone: '0933000055', governorate: 'ريف دمشق', city: 'جرمانا', address: 'قرب المشفى الوطني', hs_year: 2024, hs_score: 2050, program: 'المعهد التقاني للأمن السيبراني', enroll_year: 2024, study_level: 2, guardian_name: 'فادي الخطيب', guardian_phone: '0944000055' },
 ];
 for (const { program, ...rest } of people) await registerStudent({ db, cfg }, staff, { ...base, ...rest, program_id: P(program) }, '127.0.0.1');
 const sara = getStudent({ db }, 2);
 
 // دليل المواد لبرنامج الأمن السيبراني (أسماء مثال)
-const pid = P('الأمن السيبراني');
+const pid = P('كلية الأمن السيبراني');
 const plan = {
   '1-1': [['مدخل إلى البرمجة', 'د. هالة سعيد'], ['الرياضيات المتقطعة', 'د. سمير ناصر'], ['مبادئ الحاسوب', 'د. ليلى منصور'], ['اللغة الإنكليزية', 'أ. رنا حداد']],
   '1-2': [['البرمجة الكائنية', 'د. هالة سعيد'], ['الفيزياء العامة', 'د. وائل جبر'], ['قواعد البيانات', 'د. كمال يونس']],
@@ -82,12 +82,15 @@ const qr = strip('server/qr.js').replace('[...Buffer.from(text, \'utf8\')]', '[.
 const shim = fs.readFileSync(path.join(root, 'scripts/demo-shim.js'), 'utf8');
 const data = JSON.stringify(state).replace(/</g, '\\u003c');
 const crestUri = 'data:image/svg+xml;base64,' + fs.readFileSync(path.join(root, 'public/brand/crest.svg')).toString('base64');   // الملف المستقل لا يرى /brand/ فيُضمَّن الشعار
-const css = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8').replaceAll('/brand/crest.svg', crestUri);
-const js = ['app.js', 'staff.js', 'student.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replaceAll('/brand/crest.svg', crestUri).replace(/<\/script/gi, '<\\/script'));
+// الشعار يُضمَّن مرة واحدة فقط (حجمه كبير): متغير CSS + متغير JS تقرؤه القوالب
+const font = (f) => 'data:font/ttf;base64,' + fs.readFileSync(path.join(root, 'public/fonts', f)).toString('base64');
+const css = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8').replaceAll('url("/brand/crest.svg")', 'var(--crest-url)')
+  .replace('url(/fonts/al-mohanad.ttf)', `url(${font('al-mohanad.ttf')})`).replace('url(/fonts/AL-Mohanad-Bold-1.ttf)', `url(${font('AL-Mohanad-Bold-1.ttf')})`);
+const js = ['app.js', 'staff.js', 'student.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replaceAll('src="/brand/crest.svg"', 'src="${window.__CREST}"').replace(/<\/script/gi, '<\\/script'));
 let html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
   .replace('<link rel="stylesheet" href="/style.css">', `<style>${css}\n.demo-bar{background:#fff4d6;color:#5b4300;font-size:13px;padding:6px 12px;border-bottom:1px solid #e7cf8a;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center}.demo-bar button{font:inherit;border:1px solid #c9a94e;background:#fff;color:#5b4300;border-radius:999px;padding:2px 12px;cursor:pointer}.demo-bar button[aria-pressed=true]{background:#5b4300;color:#fff}</style>`)
   .replace(/<script src="\/[a-z]+\.js" defer><\/script>\s*/g, '')
-  .replace('</body>', `<script>window.__DEMO__=${data};</script>\n<script>${qr}\n${shim}</script>\n<script>${js[0]}</script>\n<script>${js[1]}</script>\n<script>${js[2]}</script>\n<script>${js[3]}</script>\n</body>`);
+  .replace('</body>', `<script>window.__CREST='${crestUri}';document.documentElement.style.setProperty('--crest-url','url('+window.__CREST+')');window.__DEMO__=${data};</script>\n<script>${qr}\n${shim}</script>\n<script>${js[0]}</script>\n<script>${js[1]}</script>\n<script>${js[2]}</script>\n<script>${js[3]}</script>\n</body>`);
 fs.mkdirSync(path.join(root, 'demo'), { recursive: true });
 fs.rmSync(path.join(root, 'demo/registration-demo.html'), { force: true });
 fs.writeFileSync(path.join(root, 'demo/university-portal-demo.html'), html);

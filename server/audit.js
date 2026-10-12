@@ -7,7 +7,7 @@ const rowHash = (prev, r) => sha256([prev, r.at, r.actor_id ?? '', r.actor_label
 export function audit(db, actor, action, ref = '', ip = null) {
   const last = db.prepare('SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1').get();
   const prev = last ? last.hash : GENESIS;
-  const row = { at: Date.now(), actor_id: actor?.id ?? null, actor_label: actor?.label ?? 'النظام', role: actor?.role ?? 'system', action, ref: String(ref), ip };
+  const row = { at: Date.now(), actor_id: actor?.id ?? null, actor_label: actor?.label ?? 'النظام', role: actor?.roleKey ?? actor?.role ?? 'system', action, ref: String(ref), ip };
   db.prepare('INSERT INTO audit_log (at, actor_id, actor_label, role, action, ref, ip, prev_hash, hash) VALUES (?,?,?,?,?,?,?,?,?)')
     .run(row.at, row.actor_id, row.actor_label, row.role, row.action, row.ref, row.ip, prev, rowHash(prev, row));
 }

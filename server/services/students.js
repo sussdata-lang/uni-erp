@@ -17,13 +17,16 @@ const HS_TYPES = ['الثانوية العامة - الفرع العلمي', 'ا
 const ADMISSIONS = ['القبول العام (المفاضلة)', 'التعليم الموازي', 'التعليم المفتوح / الافتراضي', 'أبناء أعضاء الهيئة التدريسية', 'الطلاب الوافدون', 'نقل من جامعة أخرى', 'أخرى'];
 const RELATIONS = ['الأب', 'الأم', 'الأخ', 'الأخت', 'الزوج/الزوجة', 'قريب آخر', 'وصي'];
 
+// الجهة التي برنامجها الوحيد يحمل اسمها (كلية، معهد، مركز) تُعرض باسمها فقط
+export const programLabel = (p) => (p.faculty === p.name ? p.faculty : `${p.faculty} — ${p.degree} ${p.name}`);
+
 const opts = (a) => a.map((x) => (typeof x === 'object' ? x : { v: x, l: x }));
 const F = (name, label, type, o = {}) => ({ name, label, type, ...o });
 
 export function sections(db) {
   const year = new Date().getFullYear();
   const programs = db.prepare('SELECT id, faculty, name, degree, years FROM programs WHERE active = 1 ORDER BY faculty, name').all()
-    .map((p) => ({ v: p.id, l: `${p.faculty} — ${p.degree} ${p.name}`, years: p.years }));
+    .map((p) => ({ v: p.id, l: programLabel(p), years: p.years }));
   return [
     { id: 'identity', title: 'البيانات الشخصية', fields: [
       F('first_name', 'الاسم الأول', 'name', { required: true, max: 40 }),
@@ -185,7 +188,7 @@ const SELECT = `SELECT p.*, u.student_no, u.username, u.display_name, u.must_cha
 function view(db, r, { full = true, own = false } = {}) {
   const base = {
     id: r.user_id, studentNo: r.student_no, name: fullName(r), status: r.status, statusLabel: STATUS_LABEL[r.status],
-    program: { id: r.program_id, faculty: r.faculty, name: r.program_name, degree: r.degree, years: r.years }, level: r.study_level, levelLabel: levelLabel(r.study_level),
+    program: { id: r.program_id, faculty: r.faculty, name: r.program_name, degree: r.degree, years: r.years, label: programLabel({ faculty: r.faculty, name: r.program_name, degree: r.degree }) }, level: r.study_level, levelLabel: levelLabel(r.study_level),
     enrollYear: r.enroll_year, phone: r.phone, nationalId: full ? r.national_id : maskId(r.national_id),
   };
   if (!full) return base;
@@ -211,8 +214,8 @@ function duplicateCheck(db, p, selfId = 0) {
 }
 
 function composeUser(db, p) {
-  const g = db.prepare('SELECT name, degree FROM programs WHERE id = ?').get(p.program_id);
-  return { display: shortName(p), program: `${g.degree} ${g.name} - ${levelLabel(p.study_level)}` };
+  const g = db.prepare('SELECT faculty, name, degree FROM programs WHERE id = ?').get(p.program_id);
+  return { display: shortName(p), program: `${g.faculty === g.name ? g.name : `${g.degree} ${g.name}`} - ${levelLabel(p.study_level)}` };
 }
 
 export async function registerStudent({ db, cfg }, actor, input, ip) {
@@ -221,8 +224,12 @@ export async function registerStudent({ db, cfg }, actor, input, ip) {
   const pw = tempPassword(), hash = await hashPassword(pw, cfg.scryptN);
   const { id, studentNo } = tx(db, () => {
     duplicateCheck(db, p);                                    // إعادة فحص داخل المعاملة ضد السباق
-    const last = db.prepare("SELECT MAX(CAST(substr(student_no, 6) AS INTEGER)) n FROM users WHERE student_no LIKE ?").get(`${p.enroll_year}-%`).n ?? 0;
-    const no = `${p.enroll_year}-${String(last + 1).padStart(4, '0')}`;
+    // الترميز: <أحرف الكلية بالإنكليزية>-<سنة القيد>-<تسلسل من 4 خانات>، والتسلسل مستقل لكل كلية وسنة
+    const fac = db.prepare('SELECT f.code FROM programs g JOIN faculties f ON f.id = g.faculty_id WHERE g.id = ?').get(p.program_id);
+    if (!fac) throw new HttpError(400, 'هذا البرنامج غير مرتبط بكلية؛ عدّله من شاشة الكليات والبرامج أولاً.', 'validation', 'program_id');
+    const prefix = `${fac.code}-${p.enroll_year}-`;
+    const last = db.prepare('SELECT MAX(CAST(substr(student_no, ?) AS INTEGER)) n FROM users WHERE student_no LIKE ?').get(prefix.length + 1, `${prefix}%`).n ?? 0;
+    const no = `${prefix}${String(last + 1).padStart(4, '0')}`;
     const u = composeUser(db, p), now = Date.now();
     const uid = Number(db.prepare('INSERT INTO users (username, display_name, password_hash, role, student_no, program, must_change_password, created_at) VALUES (?,?,?,?,?,?,1,?)')
       .run(no, u.display, hash, 'student', no, u.program, now).lastInsertRowid);
@@ -298,17 +305,65 @@ export async function resetStudentPassword({ db, cfg }, actor, id, ip) {
   return { credentials: { username: u.username, tempPassword: pw } };
 }
 
+/* ---------------- الكليات والمعاهد والمراكز ---------------- */
+const KIND_LABEL = { college: 'كلية', institute: 'معهد', center: 'مركز' };
+export const listFaculties = (db) => db.prepare('SELECT * FROM faculties ORDER BY id').all().map((f) => ({
+  id: f.id, name: f.name, nameEn: f.name_en, code: f.code, kind: f.kind, kindLabel: KIND_LABEL[f.kind], active: !!f.active,
+  programs: db.prepare('SELECT COUNT(*) c FROM programs WHERE faculty_id = ?').get(f.id).c,
+  students: db.prepare('SELECT COUNT(*) c FROM student_profiles sp JOIN programs g ON g.id = sp.program_id WHERE g.faculty_id = ?').get(f.id).c,
+}));
+
+// رمز الكلية: الأحرف الأولى من كلمات اسمها الإنكليزي (بلا أدوات الربط)
+const STOP = new Set(['of', 'for', 'and', 'the', 'in', 'on', 'at', 'to', '&']);
+export const deriveCode = (en) => String(en).split(/\s+/).filter((w) => w && !STOP.has(w.toLowerCase())).map((w) => w[0].toUpperCase()).join('');
+
+export function addFaculty({ db }, actor, b, ip) {
+  const name = String(b?.name ?? '').replace(/\s+/g, ' ').trim(), nameEn = String(b?.nameEn ?? '').replace(/\s+/g, ' ').trim();
+  if (name.length < 3 || name.length > 80 || CTRL.test(name)) throw new HttpError(400, 'اسم الجهة بالعربية: 3 إلى 80 حرفاً.', 'validation');
+  if (!/^[A-Za-z][A-Za-z '&-]{2,99}$/.test(nameEn)) throw new HttpError(400, 'الاسم بالإنكليزية بأحرف لاتينية (3 إلى 100 حرف).', 'validation');
+  const kind = b?.kind ?? 'college';
+  if (!KIND_LABEL[kind]) throw new HttpError(400, 'نوع الجهة غير صالح.', 'validation');
+  const code = String(b?.code ?? '').trim().toUpperCase() || deriveCode(nameEn);
+  if (!/^[A-Z]{2,8}$/.test(code)) throw new HttpError(400, 'رمز الجهة: من 2 إلى 8 أحرف لاتينية كبيرة.', 'validation');
+  if (db.prepare('SELECT 1 FROM faculties WHERE name = ?').get(name)) throw new HttpError(409, 'يوجد جهة بهذا الاسم.', 'conflict');
+  if (db.prepare('SELECT 1 FROM faculties WHERE code = ?').get(code)) throw new HttpError(409, `الرمز ${code} مستخدم لجهة أخرى؛ اختر رمزاً مختلفاً.`, 'conflict');
+  const years = Number(b?.years ?? (kind === 'college' ? 4 : 2)), degree = String(b?.degree ?? '').trim() || (kind === 'college' ? 'بكالوريوس' : 'دبلوم');
+  if (!Number.isInteger(years) || years < 1 || years > 7) throw new HttpError(400, 'مدة البرنامج بين 1 و7 سنوات.', 'validation');
+  const id = tx(db, () => {
+    const fid = Number(db.prepare('INSERT INTO faculties (name, name_en, code, kind) VALUES (?,?,?,?)').run(name, nameEn, code, kind).lastInsertRowid);
+    db.prepare('INSERT INTO programs (faculty, name, degree, years, faculty_id) VALUES (?,?,?,?,?)').run(name, name, degree, years, fid);
+    audit(db, actor, `إضافة ${KIND_LABEL[kind]}: ${name} (${code})`, String(fid), ip);
+    return fid;
+  });
+  return { id, code };
+}
+
+export function toggleFaculty({ db }, actor, id, active, ip) {
+  const f = db.prepare('SELECT * FROM faculties WHERE id = ?').get(Number(id));
+  if (!f) throw new HttpError(404, 'الجهة غير موجودة.', 'not_found');
+  tx(db, () => {
+    db.prepare('UPDATE faculties SET active = ? WHERE id = ?').run(active ? 1 : 0, f.id);
+    db.prepare('UPDATE programs SET active = ? WHERE faculty_id = ?').run(active ? 1 : 0, f.id);
+    audit(db, actor, `${active ? 'تفعيل' : 'تعطيل'} ${KIND_LABEL[f.kind]}: ${f.name}`, String(f.id), ip);
+  });
+}
+
 /* ---------------- البرامج الأكاديمية ---------------- */
-export const listPrograms = (db) => db.prepare('SELECT id, faculty, name, degree, years, active FROM programs ORDER BY faculty, name').all()
-  .map((p) => ({ ...p, active: !!p.active, students: db.prepare('SELECT COUNT(*) c FROM student_profiles WHERE program_id = ?').get(p.id).c }));
+export const listPrograms = (db) => db.prepare('SELECT g.id, g.faculty, g.name, g.degree, g.years, g.active, g.faculty_id, f.code FROM programs g LEFT JOIN faculties f ON f.id = g.faculty_id ORDER BY g.active DESC, g.faculty_id, g.name').all()
+  .map((p) => ({ id: p.id, faculty: p.faculty, facultyId: p.faculty_id, facultyCode: p.code, name: p.name, degree: p.degree, years: p.years, active: !!p.active, label: programLabel(p),
+    students: db.prepare('SELECT COUNT(*) c FROM student_profiles WHERE program_id = ?').get(p.id).c }));
 
 export function addProgram({ db }, actor, b, ip) {
   const t = (v, n) => { const s = String(v ?? '').replace(/\s+/g, ' ').trim(); if (!s || s.length > n || CTRL.test(s)) throw new HttpError(400, 'بيانات البرنامج غير صالحة.', 'validation'); return s; };
-  const faculty = t(b?.faculty, 80), name = t(b?.name, 80), degree = t(b?.degree || 'بكالوريوس', 30), years = Number(b?.years);
+  const name = t(b?.name, 80), degree = t(b?.degree || 'بكالوريوس', 30), years = Number(b?.years);
+  // الكلية تُختار من قائمة الجهات المعتمدة (facultyId) كي يرتبط البرنامج برمز الترميز
+  const fac = db.prepare('SELECT id, name, active FROM faculties WHERE id = ?').get(Number(b?.facultyId));
+  if (!fac) throw new HttpError(400, 'اختر الكلية أو المعهد من القائمة.', 'validation');
+  if (!fac.active) throw new HttpError(400, 'هذه الجهة معطَّلة.', 'validation');
   if (!Number.isInteger(years) || years < 1 || years > 7) throw new HttpError(400, 'مدة البرنامج بين 1 و7 سنوات.', 'validation');
-  if (db.prepare('SELECT 1 FROM programs WHERE faculty = ? AND name = ? AND degree = ?').get(faculty, name, degree)) throw new HttpError(409, 'البرنامج موجود مسبقاً.', 'conflict');
-  const id = Number(db.prepare('INSERT INTO programs (faculty, name, degree, years) VALUES (?,?,?,?)').run(faculty, name, degree, years).lastInsertRowid);
-  audit(db, actor, 'إضافة برنامج أكاديمي', `${faculty} / ${name}`.slice(0, 100), ip);
+  if (db.prepare('SELECT 1 FROM programs WHERE faculty = ? AND name = ? AND degree = ?').get(fac.name, name, degree)) throw new HttpError(409, 'البرنامج موجود مسبقاً.', 'conflict');
+  const id = Number(db.prepare('INSERT INTO programs (faculty, name, degree, years, faculty_id) VALUES (?,?,?,?,?)').run(fac.name, name, degree, years, fac.id).lastInsertRowid);
+  audit(db, actor, 'إضافة برنامج أكاديمي', `${fac.name} / ${name}`.slice(0, 100), ip);
   return { id };
 }
 

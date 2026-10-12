@@ -46,7 +46,7 @@ test('التسجيل: ينشئ ملفاً كاملاً ورقماً جامعيا
   const r = await api('POST', '/api/students', { cookie: staff, body: form() });
   assert.equal(r.status, 201, r.text);
   const { student, credentials } = r.json;
-  assert.match(student.studentNo, /^2024-0001$/);
+  assert.match(student.studentNo, /^CSS-2024-0001$/);          // CSS = كلية العلوم الأمنية
   assert.equal(credentials.username, student.studentNo);
   assert.equal(student.profile.phone, '0944123456');          // تنظيف الفراغات
   assert.equal(student.profile.email, 'layla@example.com');
@@ -54,7 +54,7 @@ test('التسجيل: ينشئ ملفاً كاملاً ورقماً جامعيا
   assert.equal(student.profile.status, 'active');
   // أرقام متسلسلة داخل السنة نفسها
   const r2 = await api('POST', '/api/students', { cookie: staff, body: form({ national_id: '01234567891', first_name: 'سامر', mother_name: 'هدى' }) });
-  assert.equal(r2.json.student.studentNo, '2024-0002');
+  assert.equal(r2.json.student.studentNo, 'CSS-2024-0002');
 
   // دخول الطالب بكلمة مؤقتة: كل شيء محجوب حتى يغيّرها
   const s = await loginAs(credentials.username, credentials.tempPassword);
@@ -133,13 +133,13 @@ test('التعديل: يحدّث الاسم والبرنامج، وحالة غي
   assert.equal(u.status, 200, u.text);
   const row = app.db.prepare('SELECT display_name, program FROM users WHERE id = ?').get(id);
   assert.equal(row.display_name, 'ليلى أحمد الحسن');
-  assert.match(row.program, /هندسة البرمجيات ونظم المعلومات - السنة الثانية/);
+  assert.match(row.program, /المعهد العالي للعلوم الأمنية - السنة الثانية/);
   // تعديل رقم وطني إلى رقم طالب آخر مرفوض
   assert.equal((await api('PUT', `/api/students/${id}`, { cookie: staff, body: form({ national_id: '01234567891' }) })).status, 409);
 
   const w = await api('PUT', `/api/students/${id}`, { cookie: staff, body: form({ study_level: 2, program_id: 1, status: 'withdrawn' }) });
   assert.equal(w.json.student.status, 'withdrawn');
-  const s = await loginAs('2024-0001', 'NewPass#2026ok');
+  const s = await loginAs('CSS-2024-0001', 'NewPass#2026ok');
   const att = await api('POST', '/api/requests', { cookie: s.cookie, body: { service: 'attendance', details: { purpose: 'سفارة', copies: 1 } } });
   assert.equal(att.json.request.status, 'rejected'); assert.equal(att.json.request.rejectedBy, 'auto');
   const tr = await api('POST', '/api/requests', { cookie: s.cookie, body: { service: 'transcript', details: { lang: 'العربية', copies: 1 } } });
@@ -150,25 +150,67 @@ test('التعديل: يحدّث الاسم والبرنامج، وحالة غي
 
 test('إعادة تعيين كلمة المرور: تنهي الجلسات وتفرض التغيير', async () => {
   const id = (await api('GET', '/api/students?q=ليلى', { cookie: staff })).json.students[0].id;
-  const old = await loginAs('2024-0001', 'NewPass#2026ok');
+  const old = await loginAs('CSS-2024-0001', 'NewPass#2026ok');
   const r = await api('POST', `/api/students/${id}/reset-password`, { cookie: staff, body: {} });
   assert.equal(r.status, 200);
   assert.equal((await api('GET', '/api/me', { cookie: old.cookie })).json.user, null);
-  const n = await loginAs('2024-0001', r.json.credentials.tempPassword);
+  const n = await loginAs('CSS-2024-0001', r.json.credentials.tempPassword);
   assert.equal(n.user.mustChange, true);
 });
 
 test('البرامج: المدير يضيف ويعطّل، والموظف لا، والمعطَّل لا يقبل تسجيلاً جديداً', async () => {
-  assert.equal((await api('POST', '/api/admin/programs', { cookie: staff, body: { faculty: 'ك', name: 'ب', years: 4 } })).status, 403);
-  assert.equal((await api('POST', '/api/admin/programs', { cookie: admin, body: { faculty: 'ك', name: 'ب', years: 9 } })).status, 400);
-  const add = await api('POST', '/api/admin/programs', { cookie: admin, body: { faculty: 'كلية الطب', name: 'الطب البشري', degree: 'بكالوريوس', years: 6 } });
-  assert.equal(add.status, 201);
-  assert.equal((await api('POST', '/api/admin/programs', { cookie: admin, body: { faculty: 'كلية الطب', name: 'الطب البشري', years: 6 } })).status, 409);
+  assert.equal((await api('POST', '/api/admin/programs', { cookie: staff, body: { facultyId: 2, name: 'ب', years: 4 } })).status, 403);
+  assert.equal((await api('POST', '/api/admin/programs', { cookie: admin, body: { facultyId: 2, name: 'ب', years: 9 } })).status, 400);
+  assert.equal((await api('POST', '/api/admin/programs', { cookie: admin, body: { facultyId: 999, name: 'ب', years: 4 } })).status, 400);   // الكلية من القائمة المعتمدة فقط
+  const add = await api('POST', '/api/admin/programs', { cookie: admin, body: { facultyId: 3, name: 'أمن الشبكات', degree: 'بكالوريوس', years: 4 } });
+  assert.equal(add.status, 201, add.text);
+  assert.equal((await api('POST', '/api/admin/programs', { cookie: admin, body: { facultyId: 3, name: 'أمن الشبكات', years: 4 } })).status, 409);
   const opt = await api('GET', '/api/registration/options', { cookie: staff });
-  assert.ok(opt.json.sections.flatMap((s) => s.fields).find((f) => f.name === 'program_id').options.some((o) => o.v === add.json.id));
+  const options = opt.json.sections.flatMap((s) => s.fields).find((f) => f.name === 'program_id').options;
+  assert.ok(options.some((o) => o.v === add.json.id && /كلية الأمن السيبراني — بكالوريوس أمن الشبكات/.test(o.l)));
+  assert.ok(options.some((o) => o.l === 'كلية العلوم الأمنية'));                       // البرنامج الأساسي يحمل اسم الجهة فيُعرض باسمها فقط
   await api('POST', `/api/admin/programs/${add.json.id}/toggle`, { cookie: admin, body: { enabled: false } });
   const r = await api('POST', '/api/students', { cookie: staff, body: form({ national_id: '77777777777', first_name: 'عمر', mother_name: 'رنا', program_id: add.json.id, study_level: 1 }) });
   assert.equal(r.status, 400); assert.equal(r.json.field, 'program_id');
+});
+
+test('الكليات: الجهات الست المعتمدة ورموزها الإنكليزية', async () => {
+  const f = (await api('GET', '/api/faculties', { cookie: staff })).json.faculties.filter((x) => x.active);
+  assert.deepEqual(f.map((x) => [x.name, x.code]), [
+    ['المعهد العالي للعلوم الأمنية', 'HISS'], ['كلية العلوم الأمنية', 'CSS'], ['كلية الأمن السيبراني', 'CCS'],
+    ['مركز الدراسات والبحوث الأمنية', 'CSSR'], ['المعهد التقاني للعلوم الأمنية', 'TISS'], ['المعهد التقاني للأمن السيبراني', 'TICS']]);
+  const progs = (await api('GET', '/api/programs', { cookie: staff })).json.programs.filter((p) => p.active);
+  assert.equal(progs.length, 6);                                                         // لا بقايا من البرامج التجريبية القديمة
+  assert.ok(!app.db.prepare("SELECT 1 FROM programs WHERE name LIKE '%هندسة%' OR faculty LIKE '%الاقتصاد%'").get());
+});
+
+test('الترميز: اسم المستخدم يبدأ برمز الكلية، والتسلسل مستقل لكل كلية وسنة', async () => {
+  const NAMES = ['', 'سعد', 'ماهر', 'نادر', 'باسل', 'وائل'];
+  const reg = async (programId, nid, year) => (await api('POST', '/api/students', { cookie: staff, body: form({ national_id: nid, first_name: NAMES[Number(nid.slice(-1))], mother_name: 'أم ' + NAMES[Number(nid.slice(-1))], program_id: programId, enroll_year: year, hs_year: Math.min(year, 2024), study_level: 1 }) })).json;
+  const a = await reg(3, '31000000001', 2025), b = await reg(3, '31000000002', 2025), c = await reg(3, '31000000003', 2026), d = await reg(4, '31000000004', 2025);
+  assert.equal(a.student.studentNo, 'CCS-2025-0001'); assert.equal(b.student.studentNo, 'CCS-2025-0002');
+  assert.equal(c.student.studentNo, 'CCS-2026-0001');                                    // سنة جديدة تبدأ من 1
+  assert.equal(d.student.studentNo, 'CSSR-2025-0001');                                   // كلية أخرى تبدأ من 1
+  assert.equal(a.credentials.username, a.student.studentNo);                            // اسم المستخدم = الرقم الجامعي
+  const login = await loginAs(a.credentials.username, a.credentials.tempPassword);
+  assert.equal(login.user.role, 'student');
+  // رمز CSS لا يختلط مع CSSR عند حساب التسلسل
+  const e = await reg(2, '31000000005', 2025);
+  assert.equal(e.student.studentNo, 'CSS-2025-0001');
+});
+
+test('الكليات: إضافة جهة جديدة تولّد رمزاً من اسمها الإنكليزي وتمنع التكرار', async () => {
+  assert.equal((await api('POST', '/api/admin/faculties', { cookie: staff, body: { name: 'كلية الاستخبارات', nameEn: 'College of Intelligence Studies' } })).status, 403);
+  const ok = await api('POST', '/api/admin/faculties', { cookie: admin, body: { name: 'كلية الاستخبارات', nameEn: 'College of Intelligence Studies', kind: 'college' } });
+  assert.equal(ok.status, 201, ok.text); assert.equal(ok.json.code, 'CIS');
+  assert.equal((await api('POST', '/api/admin/faculties', { cookie: admin, body: { name: 'كلية أخرى', nameEn: 'Common Intelligence School', code: 'CIS' } })).status, 409);
+  assert.equal((await api('POST', '/api/admin/faculties', { cookie: admin, body: { name: 'كلية الاستخبارات', nameEn: 'Another Name' } })).status, 409);
+  assert.equal((await api('POST', '/api/admin/faculties', { cookie: admin, body: { name: 'جهة', nameEn: 'عربي' } })).status, 400);
+  const prog = app.db.prepare('SELECT id FROM programs WHERE faculty_id = ?').get(ok.json.id);
+  const r = await api('POST', '/api/students', { cookie: staff, body: form({ national_id: '32000000001', program_id: prog.id, first_name: 'سهى', mother_name: 'منى' }) });
+  assert.match(r.json.student.studentNo, /^CIS-2024-0001$/);
+  await api('POST', `/api/admin/faculties/${ok.json.id}/toggle`, { cookie: admin, body: { enabled: false } });
+  assert.equal((await api('POST', '/api/students', { cookie: staff, body: form({ national_id: '32000000002', program_id: prog.id, first_name: 'ريم', mother_name: 'هبة' }) })).status, 400);   // الجهة المعطَّلة لا تسجّل طلاباً
 });
 
 test('التدقيق: السلسلة سليمة ولا تحوي بيانات شخصية', () => {

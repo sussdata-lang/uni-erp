@@ -7,6 +7,7 @@ import { sha256 } from '../security.js';
 import { HttpError } from '../http.js';
 import { runRules } from './rules.js';
 import { issueDocument } from './documents.js';
+import { linkedTargets } from './access.js';
 
 const pad = (n, w) => String(n).padStart(w, '0');
 
@@ -37,6 +38,15 @@ export function addEvent(db, requestId, actorLabel, text) {
   db.prepare('INSERT INTO request_events (request_id, at, actor_label, text) VALUES (?,?,?,?)').run(requestId, Date.now(), actorLabel, text);
 }
 
+// نطاق رؤية الطلبات: all (كل الطلبات) | unit (المحالة إلى وحدة المستخدم) | own (طلبات الطالب نفسه)
+export const scopeOf = (user) => (user.can('request:read_all') ? 'all' : user.can('request:read_unit') ? 'unit' : 'own');
+export function visibleTo(user, r) {
+  const s = scopeOf(user);
+  if (s === 'all') return true;
+  if (s === 'unit') return !!user.unit_id && r.assigned_unit_id === user.unit_id;
+  return r.student_id === user.id;
+}
+
 export function requestView(db, r, { withStudent = false } = {}) {
   const svc = db.prepare('SELECT code, label, sla_hours FROM service_types WHERE code = ?').get(r.service_code);
   const att = db.prepare('SELECT id, orig_name, size, mime FROM attachments WHERE request_id = ?').get(r.id);
@@ -46,6 +56,7 @@ export function requestView(db, r, { withStudent = false } = {}) {
     rejectReason: r.reject_reason, rejectedBy: r.rejected_by, createdAt: r.created_at, decidedAt: r.decided_at,
     attachment: att ? { id: att.id, name: att.orig_name, size: att.size } : null,
     document: doc ? { code: doc.code, issuedAt: doc.issued_at } : null,
+    unit: r.assigned_unit_id ? db.prepare('SELECT id, name FROM org_units WHERE id = ?').get(r.assigned_unit_id) : null,
     events: db.prepare('SELECT at, actor_label AS actor, text FROM request_events WHERE request_id = ? ORDER BY id').all(r.id),
   };
   if (withStudent) {
@@ -104,9 +115,10 @@ export function createRequest({ db, cfg }, user, input, ip) {
 }
 
 export function listRequests({ db }, user, query) {
-  const own = !user.can('request:read_all');
+  const scope = scopeOf(user), own = scope === 'own';
   const where = [], args = [];
-  if (own) { where.push('student_id = ?'); args.push(user.id); }
+  if (scope === 'own') { where.push('student_id = ?'); args.push(user.id); }
+  if (scope === 'unit') { where.push('assigned_unit_id = ?'); args.push(user.unit_id ?? -1); }
   if (['review', 'approved', 'rejected'].includes(query.status)) { where.push('status = ?'); args.push(query.status); }
   const rows = db.prepare(`SELECT * FROM requests ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT 200`).all(...args);
   return rows.map((r) => requestView(db, r, { withStudent: !own }));
@@ -115,14 +127,15 @@ export function listRequests({ db }, user, query) {
 export function getRequest({ db }, user, id) {
   const r = db.prepare('SELECT * FROM requests WHERE id = ?').get(Number(id));
   // الطالب لا يرى إلا طلباته، والرد 404 كي لا يُكشف وجود طلبات الآخرين
-  if (!r || (!user.can('request:read_all') && r.student_id !== user.id)) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
-  return requestView(db, r, { withStudent: user.can('request:read_all') });
+  if (!r || !visibleTo(user, r)) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
+  return requestView(db, r, { withStudent: scopeOf(user) !== 'own' });
 }
 
 export function decide({ db, cfg }, user, id, action, reason, ip) {
   return tx(db, () => {
     const r = db.prepare('SELECT * FROM requests WHERE id = ?').get(Number(id));
     if (!r) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
+    if (!visibleTo(user, r)) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
     if (r.status !== 'review') throw new HttpError(409, 'تم البت في هذا الطلب مسبقاً.', 'conflict');
     if (r.student_id === user.id) throw new HttpError(403, 'لا يجوز البت في طلبك الخاص (فصل المهام).', 'forbidden');
     const now = Date.now();
@@ -143,6 +156,29 @@ export function decide({ db, cfg }, user, id, action, reason, ip) {
   });
 }
 
+// إحالة طلب قيد المراجعة إلى وحدة مرتبطة بوحدة المستخدم (أو إلى أي وحدة لمن لا وحدة له، كالمدير)
+export function forwardRequest({ db }, user, id, input, ip) {
+  return tx(db, () => {
+    const r = db.prepare('SELECT * FROM requests WHERE id = ?').get(Number(id));
+    if (!r || !visibleTo(user, r)) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
+    if (r.status !== 'review') throw new HttpError(409, 'لا تُحال إلا الطلبات قيد المراجعة.', 'conflict');
+    const t = db.prepare('SELECT id, name, active FROM org_units WHERE id = ?').get(Number(input?.unitId));
+    if (!t || !t.active) throw new HttpError(400, 'الوحدة المطلوبة غير موجودة أو معطَّلة.', 'validation');
+    if (r.assigned_unit_id === t.id) throw new HttpError(409, 'الطلب عند هذه الوحدة أصلاً.', 'conflict');
+    if (user.unit_id) {
+      if (!linkedTargets(db, user.unit_id).some((x) => x.id === t.id)) throw new HttpError(403, 'وحدتك غير مرتبطة بهذه الوحدة؛ تُحال الطلبات إلى الوحدات المرتبطة فقط.', 'forbidden');
+    } else if (user.role !== 'admin' || user.role_key) {
+      throw new HttpError(403, 'حسابك غير مرتبط بوحدة إدارية، فلا يمكنه الإحالة.', 'forbidden');
+    }
+    const note = String(input?.note ?? '').replace(/\s+/g, ' ').trim();
+    if (note.length > 300) throw new HttpError(400, 'الملاحظة لا تتجاوز 300 حرف.', 'validation');
+    db.prepare('UPDATE requests SET assigned_unit_id = ? WHERE id = ?').run(t.id, r.id);
+    addEvent(db, r.id, user.label, `إحالة الطلب إلى «${t.name}»${note ? `: ${note}` : ''}`);
+    audit(db, user, `إحالة طلب إلى ${t.name}`, r.no, ip);
+    return requestView(db, db.prepare('SELECT * FROM requests WHERE id = ?').get(r.id), { withStudent: true });
+  });
+}
+
 export function stats({ db }) {
   const by = Object.fromEntries(db.prepare('SELECT status, COUNT(*) c FROM requests GROUP BY status').all().map((r) => [r.status, r.c]));
   const avg = db.prepare("SELECT AVG(decided_at - created_at) a FROM requests WHERE status = 'approved'").get().a;
@@ -153,7 +189,7 @@ export function stats({ db }) {
 
 export function readAttachment({ db, cfg }, user, id) {
   const a = db.prepare('SELECT a.*, r.student_id FROM attachments a JOIN requests r ON r.id = a.request_id WHERE a.id = ?').get(Number(id));
-  if (!a || (!user.can('request:read_all') && a.student_id !== user.id)) throw new HttpError(404, 'غير موجود.', 'not_found');
+  if (!a || !visibleTo(user, db.prepare('SELECT * FROM requests WHERE id = ?').get(a.request_id))) throw new HttpError(404, 'غير موجود.', 'not_found');
   const file = path.join(cfg.uploadDir, a.stored_name);
   const buf = fs.readFileSync(file);
   if (sha256(buf) !== a.sha256) throw new HttpError(500, 'سلامة المرفق مخالفة للمسجَّل.', 'integrity');

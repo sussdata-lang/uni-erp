@@ -86,6 +86,7 @@
     if (path === '/api/auth/change-password') return { ok: true };
     if (path === '/api/services') return { services: D.services };
     if (path === '/api/programs') return { programs: st.programs };
+    if (path === '/api/units/targets') return { targets: [] };
     if (path === '/api/registration/options') return D.options;
     if (path === '/api/news' && method === 'GET') return { news: st.news.slice().sort((a, b) => (b.pinned - a.pinned) || (b.publishedAt - a.publishedAt) || b.id - a.id) };
     if (path === '/api/news' && method === 'POST') { staffOnly(); const t = String(body.title || '').trim(), b = String(body.body || '').trim(); if (t.length < 3) throw err(400, '«العنوان» يجب أن يكون بين 3 و150 حرفاً.', 'validation'); if (b.length < 3) throw err(400, '«النص» يجب أن يكون بين 3 و4000 حرف.', 'validation'); const id = nextId(st.news); st.news.push({ id, title: t, body: b, pinned: !!body.pinned, publishedAt: now() }); return { __status: 201, id }; }
@@ -193,8 +194,9 @@
       return { total: l.length, students: l.map(maskCard) };
     }
     if (path === '/api/students' && method === 'POST') {
-      staffOnly(); const year = Number(body.enroll_year), last = Math.max(0, ...st.students.filter((s) => s.studentNo.startsWith(year + '-')).map((s) => Number(s.studentNo.slice(5))));
-      const no = `${year}-${String(last + 1).padStart(4, '0')}`, s = buildStudent(nextId(st.students) + 10, no, body, null); st.students.push(s);
+      staffOnly(); const year = Number(body.enroll_year), g0 = prog(body.program_id), prefix = `${g0 ? g0.facultyCode : 'GEN'}-${year}-`;   // الترميز: رمز الكلية-السنة-تسلسل
+      const last = Math.max(0, ...st.students.filter((s) => s.studentNo.startsWith(prefix)).map((s) => Number(s.studentNo.slice(prefix.length))));
+      const no = `${prefix}${String(last + 1).padStart(4, '0')}`, s = buildStudent(nextId(st.students) + 10, no, body, null); st.students.push(s);
       return { __status: 201, student: s, credentials: { username: no, tempPassword: tmpPw() } };
     }
     x = m(/^\/api\/students\/(\d+)$/);

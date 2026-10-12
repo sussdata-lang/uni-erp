@@ -7,7 +7,7 @@ export class HttpError extends Error {
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.ico': 'image/x-icon', '.png': 'image/png',
-  '.webmanifest': 'application/manifest+json; charset=utf-8' };
+  '.webmanifest': 'application/manifest+json; charset=utf-8', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
 
 // ترويسات أمنية: لا سكربتات إلا من الموقع نفسه، ولا تضمين في إطارات، ولا تخمين لأنواع الملفات
 const SECURITY_HEADERS = {

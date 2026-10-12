@@ -1,14 +1,13 @@
 import { Router, HttpError, sendRaw } from './http.js';
-import { login, logout, publicUser, createUser, changePassword } from './services/auth.js';
-import { registrationOptions, registerStudent, listStudents, getStudent, updateStudent, resetStudentPassword, myProfile, updateOwnContact, listPrograms, addProgram, toggleProgram } from './services/students.js';
+import { login, logout, publicUser, changePassword } from './services/auth.js';
+import { listStaff, createUser, updateUser, setUserActive, resetUserPassword } from './services/useradmin.js';
+import { overview, createRole, updateRole, deleteRole, createUnit, updateUnit, createLink, deleteLink, linkedTargets } from './services/access.js';
+import { registrationOptions, registerStudent, listStudents, getStudent, updateStudent, resetStudentPassword, myProfile, updateOwnContact, listPrograms, addProgram, toggleProgram, listFaculties, addFaculty, toggleFaculty } from './services/students.js';
 import { listCourses, createCourse, toggleCourse, myGrades, gradesFor, enterGrade, listNews, createNews, deleteNews, createComplaint, listComplaints, respondComplaint } from './services/academics.js';
-import { createRequest, listRequests, getRequest, decide, stats, readAttachment } from './services/requests.js';
+import { createRequest, listRequests, getRequest, decide, forwardRequest, stats, readAttachment } from './services/requests.js';
 import { getDocument, verifyPublic } from './services/documents.js';
 import { audit, verifyAuditChain } from './audit.js';
 import { qrSvg } from './qr.js';
-import { getSite, saveSite } from './services/site.js';
-import { updateUser, setUserActive, resetUserPassword } from './services/useradmin.js';
-import { listServices, createService, updateService } from './services/catalog.js';
 
 const need = (ctx, perm) => { if (!ctx.user.can(perm)) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden'); };
 
@@ -26,7 +25,7 @@ export function buildRouter(deps) {
   r.add('POST', '/api/auth/change-password', async (c) => { await changePassword(deps, c.user, c.cookies.sid, c.body, c.ip); c.json(200, { ok: true }); }, { allowMustChange: true });
   // بلا جلسة يعيد user:null بحالة 200 (لا ضجيج 401 في المتصفح عند أول فتح)
   r.add('GET', '/api/health', (c) => { db.prepare('SELECT 1').get(); c.json(200, { ok: true }); }, { auth: false });   // فحص صحة للاستضافة
-  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(c.user) : null, university: getSite(deps).university, site: getSite(deps) }), { auth: false });
+  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(db, c.user) : null, university: cfg.universityName }), { auth: false });
 
   r.add('GET', '/api/me/profile', (c) => { need(c, 'profile:read_own'); c.json(200, { profile: myProfile(deps, c.user) }); });
 
@@ -65,6 +64,9 @@ export function buildRouter(deps) {
   r.add('PUT', '/api/students/:id', (c) => { need(c, 'student:update'); c.json(200, { student: updateStudent(deps, c.user, c.params.id, c.body, c.ip) }); });
   r.add('POST', '/api/students/:id/reset-password', async (c) => { need(c, 'student:reset_password'); c.json(200, await resetStudentPassword(deps, c.user, c.params.id, c.ip)); });
   r.add('GET', '/api/programs', (c) => { need(c, 'student:read'); c.json(200, { programs: listPrograms(db) }); });
+  r.add('GET', '/api/faculties', (c) => { need(c, 'student:read'); c.json(200, { faculties: listFaculties(db) }); });
+  r.add('POST', '/api/admin/faculties', (c) => { need(c, 'program:manage'); c.json(201, addFaculty(deps, c.user, c.body, c.ip)); });
+  r.add('POST', '/api/admin/faculties/:id/toggle', (c) => { need(c, 'program:manage'); toggleFaculty(deps, c.user, c.params.id, !!c.body.enabled, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/admin/programs', (c) => { need(c, 'program:manage'); c.json(201, addProgram(deps, c.user, c.body, c.ip)); });
   r.add('POST', '/api/admin/programs/:id/toggle', (c) => { need(c, 'program:manage'); toggleProgram(deps, c.user, c.params.id, !!c.body.enabled, c.ip); c.json(200, { ok: true }); });
 
@@ -73,12 +75,20 @@ export function buildRouter(deps) {
     .map((s) => ({ code: s.code, label: s.label, description: s.description, slaHours: s.sla_hours, requiresAttachment: !!s.requires_attachment, fields: JSON.parse(s.fields_json) })) }));
   r.add('POST', '/api/requests', (c) => { need(c, 'request:create'); c.json(201, { request: createRequest(deps, c.user, c.body, c.ip) }); }, { maxBody: 3.2 * 1024 * 1024 });
   r.add('GET', '/api/requests', (c) => {
-    if (!c.user.can('request:read_own') && !c.user.can('request:read_all')) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden');
+    if (!c.user.can('request:read_own') && !c.user.can('request:read_all') && !c.user.can('request:read_unit')) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden');
     c.json(200, { requests: listRequests(deps, c.user, c.query) });
   });
   r.add('GET', '/api/requests/:id', (c) => c.json(200, { request: getRequest(deps, c.user, c.params.id) }));
   r.add('POST', '/api/requests/:id/approve', (c) => { need(c, 'request:decide'); c.json(200, { request: decide(deps, c.user, c.params.id, 'approve', null, c.ip) }); });
   r.add('POST', '/api/requests/:id/reject', (c) => { need(c, 'request:decide'); c.json(200, { request: decide(deps, c.user, c.params.id, 'reject', c.body.reason, c.ip) }); });
+  r.add('POST', '/api/requests/:id/forward', (c) => { need(c, 'request:forward'); c.json(200, { request: forwardRequest(deps, c.user, c.params.id, c.body, c.ip) }); });
+  // الوحدات التي يستطيع المستخدم الإحالة إليها (حسب ارتباط وحدته)
+  r.add('GET', '/api/units/targets', (c) => {
+    need(c, 'request:forward');
+    const targets = c.user.unit_id ? linkedTargets(db, c.user.unit_id)
+      : (c.user.role === 'admin' && !c.user.role_key ? db.prepare('SELECT id, name FROM org_units WHERE active = 1 ORDER BY id').all() : []);
+    c.json(200, { targets });
+  });
   r.add('GET', '/api/attachments/:id', (c) => {
     const a = readAttachment(deps, c.user, c.params.id);
     sendRaw(c.res, 200, { 'Content-Type': a.mime, 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(a.name)}` }, a.buf);
@@ -108,19 +118,24 @@ export function buildRouter(deps) {
   r.add('GET', '/api/audit/verify', (c) => { need(c, 'audit:read'); c.json(200, verifyAuditChain(db)); });
 
   // ---- الإدارة ----
-  r.add('GET', '/api/admin/users', (c) => {
-    need(c, 'user:manage');
-    c.json(200, { users: db.prepare('SELECT id, username, display_name AS name, role, student_no AS studentNo, active FROM users ORDER BY id').all() });
-  });
+  r.add('GET', '/api/admin/users', (c) => { need(c, 'user:manage'); c.json(200, { users: listStaff(db) }); });
   r.add('POST', '/api/admin/users', async (c) => { need(c, 'user:manage'); c.json(201, await createUser(deps, c.user, c.body, c.ip)); });
   r.add('PUT', '/api/admin/users/:id', (c) => { need(c, 'user:manage'); c.json(200, updateUser(deps, c.user, c.params.id, c.body, c.ip)); });
-  r.add('POST', '/api/admin/users/:id/active', (c) => { need(c, 'user:manage'); c.json(200, setUserActive(deps, c.user, c.params.id, c.body?.active, c.ip)); });
+  r.add('POST', '/api/admin/users/:id/active', (c) => { need(c, 'user:manage'); c.json(200, setUserActive(deps, c.user, c.params.id, !!c.body.active, c.ip)); });
   r.add('POST', '/api/admin/users/:id/reset-password', async (c) => { need(c, 'user:manage'); c.json(200, await resetUserPassword(deps, c.user, c.params.id, c.ip)); });
-  r.add('GET', '/api/admin/settings', (c) => { need(c, 'site:manage'); c.json(200, { site: getSite(deps) }); });
-  r.add('PUT', '/api/admin/settings', (c) => { need(c, 'site:manage'); c.json(200, { site: saveSite(deps, c.user, c.body, c.ip) }); });
-  r.add('GET', '/api/admin/services', (c) => { need(c, 'service:manage'); c.json(200, { services: listServices(deps) }); });
-  r.add('POST', '/api/admin/services', (c) => { need(c, 'service:manage'); c.json(201, createService(deps, c.user, c.body, c.ip)); });
-  r.add('PUT', '/api/admin/services/:code', (c) => { need(c, 'service:manage'); c.json(200, updateService(deps, c.user, c.params.code, c.body, c.ip)); });
+
+  // ---- الأدوار والوحدات وروابطها ----
+  r.add('GET', '/api/admin/access', (c) => {
+    if (!c.user.can('user:manage') && !c.user.can('role:manage')) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden');
+    c.json(200, { ...overview(db), users: listStaff(db), canManageRoles: c.user.can('role:manage'), canManageUsers: c.user.can('user:manage') });
+  });
+  r.add('POST', '/api/admin/roles', (c) => { need(c, 'role:manage'); c.json(201, createRole(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/admin/roles/:key', (c) => { need(c, 'role:manage'); c.json(200, updateRole(deps, c.user, c.params.key, c.body, c.ip)); });
+  r.add('DELETE', '/api/admin/roles/:key', (c) => { need(c, 'role:manage'); c.json(200, deleteRole(deps, c.user, c.params.key, c.ip)); });
+  r.add('POST', '/api/admin/units', (c) => { need(c, 'role:manage'); c.json(201, createUnit(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/admin/units/:id', (c) => { need(c, 'role:manage'); c.json(200, updateUnit(deps, c.user, c.params.id, c.body, c.ip)); });
+  r.add('POST', '/api/admin/links', (c) => { need(c, 'role:manage'); c.json(201, createLink(deps, c.user, c.body, c.ip)); });
+  r.add('DELETE', '/api/admin/links/:id', (c) => { need(c, 'role:manage'); c.json(200, deleteLink(deps, c.user, c.params.id, c.ip)); });
   r.add('GET', '/api/admin/holds', (c) => {
     need(c, 'holds:manage');
     c.json(200, { holds: db.prepare(`SELECT h.id, h.hold_type AS holdType, h.note, h.active, h.created_at AS createdAt, u.display_name AS student, u.student_no AS studentNo
@@ -128,7 +143,7 @@ export function buildRouter(deps) {
   });
   r.add('POST', '/api/admin/holds', (c) => {
     need(c, 'holds:manage');
-    const s = db.prepare("SELECT id FROM users WHERE student_no = ? AND role = 'student'").get(String(c.body.studentNo ?? ''));
+    const s = db.prepare("SELECT id FROM users WHERE student_no = ? COLLATE NOCASE AND role = 'student'").get(String(c.body.studentNo ?? '').trim());
     if (!s) throw new HttpError(404, 'لا يوجد طالب بهذا الرقم الجامعي.', 'not_found');
     if (!['financial', 'disciplinary', 'library'].includes(c.body.holdType)) throw new HttpError(400, 'نوع الذمة غير صالح.', 'validation');
     const res = db.prepare('INSERT INTO student_holds (student_id, hold_type, note, created_by, created_at) VALUES (?,?,?,?,?)')
