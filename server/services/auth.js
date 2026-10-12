@@ -23,9 +23,10 @@ export function sessionUser(db, token) {
 
 export async function login({ db, cfg, limiter }, { username, password, ip, ua }) {
   if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) throw new HttpError(400, 'أدخل اسم المستخدم وكلمة المرور.', 'bad_request');
-  if (!limiter.check(`login:${ip}`, 20, 60_000) || !limiter.check(`login:${username.toLowerCase()}`, 8, 60_000))
+  if (!limiter.check(`login:${ip}`, 20, 60_000) || !limiter.check(`login:${username.trim().toLowerCase()}`, 8, 60_000))
     throw new HttpError(429, 'محاولات كثيرة؛ حاول بعد دقيقة.', 'rate_limited');
-  const u = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  username = username.trim();                                  // مسافات اللصق أو الإكمال التلقائي
+  const u = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username);   // admin وAdmin حساب واحد
   dummyHash ??= await hashPassword('dummy-password-0', cfg.scryptN);
   if (u && u.locked_until > Date.now()) {
     audit(db, null, 'دخول مرفوض: حساب مقفل', username, ip);
@@ -37,6 +38,8 @@ export async function login({ db, cfg, limiter }, { username, password, ip, ua }
       const fails = u.failed_logins + 1;
       db.prepare('UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?').run(fails >= MAX_FAILS ? 0 : fails, fails >= MAX_FAILS ? Date.now() + LOCK_MS : 0, u.id);
     }
+    // سبب الرفض يُكتب في سجل الخادم فقط (لا كلمة مرور ولا تلميح للمستخدم) لتشخيص مشاكل الدخول
+    console.warn(`[login] رفض: ${username.slice(0, 40)} — ${!u ? 'لا يوجد مستخدم بهذا الاسم' : !u.active ? 'الحساب معطّل' : 'كلمة المرور لا تطابق'}`);
     audit(db, null, 'دخول مرفوض', username, ip);
     throw new HttpError(401, 'اسم المستخدم أو كلمة المرور غير صحيحة.', 'bad_credentials');
   }

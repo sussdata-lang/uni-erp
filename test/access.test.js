@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createApp } from '../server/app.js';
 import { hashPassword } from '../server/security.js';
 import { verifyAuditChain } from '../server/audit.js';
-import { ensureCoreAccounts } from '../server/services/bootstrap.js';
+import { ensureCoreAccounts, seedPassword } from '../server/services/bootstrap.js';
 
 const PW = 'Test#Pass12345';
 let app, base, admin, auditor, staff;
@@ -235,4 +235,17 @@ test('التدقيق: كل عملية إدارية مسجَّلة والسلسل
   const acts = app.db.prepare('SELECT action FROM audit_log').all().map((r) => r.action).join('\n');
   for (const k of ['إنشاء دور', 'إنشاء حساب إداري', 'إضافة وحدة إدارية', 'ربط وحدتين', 'إحالة طلب إلى', 'تعديل دور', 'حذف رابط']) assert.ok(acts.includes(k), k);
   assert.equal(verifyAuditChain(app.db).ok, true);
+});
+
+test('الدخول: اسم المستخدم لا يتأثر بحالة الأحرف أو المسافات، وكلمة المرور من البيئة تُنظَّف', async () => {
+  for (const u of ['ADMIN', ' Admin ', 'admin']) {
+    app.limiter.hits.clear();
+    assert.equal((await api('POST', '/api/auth/login', { body: { username: u, password: PW } })).status, 200, u);
+  }
+  app.limiter.hits.clear();
+  assert.equal((await api('POST', '/api/auth/login', { body: { username: 'admin', password: PW + ' ' } })).status, 401);   // كلمة المرور نفسها لا تُقصّ
+  assert.equal(seedPassword({}), '1572690');
+  assert.equal(seedPassword({ SEED_PASSWORD: '  1572690 ' }), '1572690');
+  assert.equal(seedPassword({ SEED_PASSWORD: '"Strong#Pass2026"' }), 'Strong#Pass2026');
+  assert.equal(seedPassword({ SEED_PASSWORD: '' }), '1572690');
 });

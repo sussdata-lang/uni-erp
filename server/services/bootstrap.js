@@ -5,6 +5,13 @@ import { hashPassword } from '../security.js';
 // كلمة المرور الابتدائية المطلوبة للحسابين الأساسيين. تُغيَّر بالمتغير SEED_PASSWORD دون تعديل الكود.
 export const DEFAULT_SEED_PASSWORD = '1572690';
 
+// قراءة كلمة المرور من البيئة: تُنظَّف من المسافات وعلامات الاقتباس التي تُلصق أحياناً عند نسخ قيمة المتغير
+export function seedPassword(env = process.env) {
+  let v = String(env.SEED_PASSWORD ?? '').trim();
+  if (/^(["'`]).*\1$/.test(v)) v = v.slice(1, -1).trim();
+  return v || DEFAULT_SEED_PASSWORD;
+}
+
 export const CORE_ACCOUNTS = [
   { username: 'admin',    name: 'مدير النظام',  role: 'admin' },
   { username: 'auditor1', name: 'مدقق الجودة',  role: 'auditor' },
