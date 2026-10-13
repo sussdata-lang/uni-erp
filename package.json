@@ -11,6 +11,7 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
     "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.js\"",
-    "accounts": "node --disable-warning=ExperimentalWarning scripts/accounts.js"
+    "accounts": "node --disable-warning=ExperimentalWarning scripts/accounts.js",
+    "certs": "node --disable-warning=ExperimentalWarning scripts/certs.js"
   }
 }
