@@ -1,3 +1,4 @@
+import { mediaFor, addLink, removeFiles } from './media.js';
 import { audit } from '../audit.js';
 import { HttpError } from '../http.js';
 import { tx } from '../db.js';
@@ -101,18 +102,26 @@ export function enterGrade({ db }, actor, studentId, b, ip) {
 
 /* ---------------- الأخبار ---------------- */
 export function listNews({ db }, limit = 30) {
-  return db.prepare('SELECT id, title, body, pinned, published_at FROM news ORDER BY pinned DESC, published_at DESC, id DESC LIMIT ?').all(limit)
-    .map((n) => ({ id: n.id, title: n.title, body: n.body, pinned: !!n.pinned, publishedAt: n.published_at }));
+  const rows = db.prepare('SELECT id, title, body, pinned, published_at FROM news ORDER BY pinned DESC, published_at DESC, id DESC LIMIT ?').all(limit);
+  const media = mediaFor(db, rows.map((n) => n.id));
+  return rows.map((n) => ({ id: n.id, title: n.title, body: n.body, pinned: !!n.pinned, publishedAt: n.published_at, media: media.get(n.id) ?? [] }));
 }
+// links: روابط اختيارية تُصنَّف وتُتحقَّق قبل حفظ الخبر (فإن فسد أحدها لا يُنشر شيء)
 export function createNews({ db }, actor, b, ip) {
   const title = text(b?.title, 3, 150, 'العنوان'), body = text(b?.body, 3, 4000, 'النص');
-  const id = Number(db.prepare('INSERT INTO news (title, body, pinned, published_at, created_by) VALUES (?,?,?,?,?)').run(title, body, b?.pinned ? 1 : 0, Date.now(), actor.id).lastInsertRowid);
-  audit(db, actor, 'نشر خبر', title.slice(0, 100), ip);
-  return { id };
+  const links = Array.isArray(b?.links) ? b.links.map((l) => String(l).trim()).filter(Boolean) : [];
+  if (links.length > 8) throw new HttpError(400, 'الحد الأقصى 8 روابط للخبر الواحد.', 'validation');
+  return tx(db, () => {
+    const id = Number(db.prepare('INSERT INTO news (title, body, pinned, published_at, created_by) VALUES (?,?,?,?,?)').run(title, body, b?.pinned ? 1 : 0, Date.now(), actor.id).lastInsertRowid);
+    for (const l of links) addLink({ db }, actor, id, l, null, ip);
+    audit(db, actor, 'نشر خبر', title.slice(0, 100), ip);
+    return { id };
+  });
 }
-export function deleteNews({ db }, actor, id, ip) {
+export function deleteNews({ db, cfg }, actor, id, ip) {
   const n = db.prepare('SELECT title FROM news WHERE id = ?').get(Number(id));
   if (!n) throw new HttpError(404, 'الخبر غير موجود.', 'not_found');
+  removeFiles(db, cfg, Number(id));
   db.prepare('DELETE FROM news WHERE id = ?').run(Number(id));
   audit(db, actor, 'حذف خبر', n.title.slice(0, 100), ip);
 }

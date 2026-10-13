@@ -1,4 +1,5 @@
 import { tx } from '../db.js';
+import { enqueueCertificate } from './enrollcert.js';
 import { audit } from '../audit.js';
 import { hashPassword, tempPassword } from '../security.js';
 import { HttpError } from '../http.js';
@@ -204,7 +205,7 @@ export function registrationOptions(db, canManage) {
 }
 
 /* ---------------- العمليات ---------------- */
-function duplicateCheck(db, p, selfId = 0) {
+export function duplicateCheck(db, p, selfId = 0) {
   const byId = db.prepare('SELECT u.student_no FROM student_profiles s JOIN users u ON u.id = s.user_id WHERE s.national_id = ? AND s.user_id != ?').get(p.national_id, selfId);
   if (byId) throw new HttpError(409, `الرقم الوطني مسجَّل مسبقاً للطالب ذي الرقم الجامعي ${byId.student_no}.`, 'duplicate', 'national_id');
   const same = db.prepare(`SELECT u.student_no FROM student_profiles s JOIN users u ON u.id = s.user_id
@@ -239,6 +240,7 @@ export async function registerStudent({ db, cfg }, actor, input, ip) {
     audit(db, actor, 'تسجيل طالب جديد', no, ip);
     return { id: uid, studentNo: no };
   });
+  enqueueCertificate({ db, cfg }, id);                       // شهادة التسجيل الموقَّعة + الختم الزمني: في الخلفية، دون تأخير الاستجابة أو إفشالها
   return { student: getStudent({ db }, id), credentials: { username: studentNo, tempPassword: pw } };
 }
 

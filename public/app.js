@@ -21,6 +21,24 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     return j;
   }
 
+  // رفع ملف خام (صور/فيديو الأخبار): النوع يُحدَّد في الخادم من البايتات لا من الامتداد
+  async function upload(url, file) {
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+    let j = null; try { j = await res.json(); } catch { /* */ }
+    if (!res.ok) { const e = new Error((j && j.message) || 'فشل رفع الملف.'); e.status = res.status; throw e; }
+    return j;
+  }
+  // عرض وسائط الخبر: صورة، فيديو مباشر/مرفوع، أو تضمين يوتيوب/فيميو (روابط https معتمدة فقط من الخادم)
+  function mediaHtml(list, { compact = false } = {}) {
+    if (!list || !list.length) return '';
+    return `<div class="news-media${compact ? ' compact' : ''}">${list.map((m) => {
+      const cap = m.caption ? `<figcaption>${esc(m.caption)}</figcaption>` : '';
+      if (m.source === 'embed') return `<figure><div class="vid"><iframe src="${esc(m.src)}" title="${esc(m.caption || 'فيديو')}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe></div>${cap}</figure>`;
+      if (m.kind === 'video') return `<figure><video src="${esc(m.src)}" controls preload="metadata" playsinline></video>${cap}</figure>`;
+      return `<figure><img src="${esc(m.src)}" alt="${esc(m.caption || 'صورة الخبر')}" loading="lazy" referrerpolicy="no-referrer">${cap}</figure>`;
+    }).join('')}</div>`;
+  }
+
   /* ---------- الحالة ---------- */
   const S = { uni: 'الجامعة السورية للعلوم الأمنية', me: null, services: [], view: null, requests: [], stats: null, sel: null, filter: 'all', rej: null, svc: null, files: {},
     vtext: '', vres: null, adminTab: 'holds', admin: {}, audit: null, chain: null, err: '',
@@ -33,8 +51,10 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     // قوائم العاملين تُبنى من الصلاحيات الفعلية لا من اسم الدور، فتصلح للأدوار المخصّصة
     const v = [];
     if (can('request:read_all') || can('request:read_unit') || can('student:read') || can('student:register')) v.push(['affairs', can('student:read') || can('student:register') ? 'شؤون الطلاب' : 'الطلبات']);
+    if (can('stats:read')) v.push(['dashboard', 'الإحصاءات']);
     if (can('course:manage') || can('grade:manage')) v.push(['academics', 'المواد والعلامات']);
     if (can('news:manage') || can('complaint:manage')) v.push(['comms', 'الأخبار والشكاوى']);
+    if (can('student:register') || can('course:manage') || can('grade:manage')) v.push(['import', 'الاستيراد']);
     if (can('holds:manage') || can('rules:manage') || can('program:manage')) v.push(['admin', 'الإدارة']);
     if (can('user:manage') || can('role:manage')) v.push(['access', 'الحسابات والصلاحيات']);
     if (can('audit:read')) v.push(['audit', 'التدقيق']);
@@ -228,7 +248,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   function studentDetail(st) {
     return `<div class="me"><div class="avatar">${esc(st.name[0])}</div><div><b>${esc(st.name)}</b><small class="mono">${esc(st.studentNo)}</small></div></div>
       <div style="margin:8px 0">${spill(st.status, st.statusLabel)} ${st.activeHolds ? `<span class="pill p-rejected">${st.activeHolds} ذمة قائمة</span>` : ''}</div>
-      <div class="actions no-print"><button class="btn pri sm" data-act="stedit">تعديل</button><button class="btn sm" data-act="stpw">إعادة تعيين كلمة المرور</button></div>
+      <div class="actions no-print"><button class="btn pri sm" data-act="stedit">تعديل</button><button class="btn sm" data-act="stpw">إعادة تعيين كلمة المرور</button><button class="btn sm" data-act="stcert">شهادة التسجيل الموقَّعة (PDF)</button></div>${S.stCert ? `<p class="small">رمز التحقق <span class="mono" dir="ltr">${esc(S.stCert.code)}</span> · ${S.stCert.tsaStatus === 'rfc3161' ? 'ختم زمني موثوق' : S.stCert.tsaStatus === 'failed' ? 'تعذّر الختم الموثوق' : 'ختم زمني محلي'} · بصمة <span class="mono" dir="ltr">${esc(S.stCert.pdfSha256.slice(0, 16))}…</span>${S.stCert.selfSigned ? ' · شهادة ذاتية' : ''}</p>` : ''}
       ${relatedRequests(st)}${profileKv(st)}<p class="small">سُجِّل ${fmt(st.createdAt)} · آخر تعديل ${fmt(st.updatedAt)}</p>`;
   }
   function auditView() {
@@ -241,13 +261,19 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   function verifyView() {
     const r = S.vres; let res = '';
     if (r) {
-      if (r.valid) res = `<div class="result good"><h3>الوثيقة صحيحة وصادرة عن الجامعة</h3><dl class="kv"><dt>النوع</dt><dd>${esc(r.service)}</dd><dt>الطالب</dt><dd>${esc(r.student)}</dd><dt>تاريخ الإصدار</dt><dd>${fmt(r.issuedAt)}</dd><dt>بصمة الوثيقة</dt><dd class="mono">${esc(r.hashPrefix)}…</dd></dl><p class="hint" style="margin-bottom:0">أُعيد حساب البصمة والتوقيع من سجل الجامعة وطابقا المخزَّنين وقت الإصدار.</p></div>`;
+      if (r.valid && r.kind === 'enrollment') {
+        const sg = r.signature, ts = sg.timestamp, tsTxt = ts.status === 'rfc3161' ? `ختم زمني موثوق (RFC 3161) بتاريخ ${fmt(ts.time)}${ts.embedded && ts.imprintOk ? ' — مطابق لبصمة التوقيع' : ''}` : ts.status === 'failed' ? 'تعذّر الحصول على ختم زمني موثوق وقت الإصدار؛ يُعتمد وقت الخادم' : 'وقت التوقيع من خادم الجامعة (دون جهة ختم خارجية)';
+        res = `<div class="result good"><h3>الشهادة صحيحة وموقَّعة رقمياً</h3><dl class="kv"><dt>النوع</dt><dd>${esc(r.service)}</dd><dt>الطالب</dt><dd>${esc(r.student)}</dd><dt>الكلية / المعهد</dt><dd>${esc(r.faculty)}</dd><dt>وقت التوقيع</dt><dd>${fmt(sg.signingTime ? new Date(sg.signingTime).getTime() : r.issuedAt)}</dd>
+          <dt>بصمة الملف SHA-256</dt><dd class="mono" dir="ltr">${esc(r.hashPrefix)}…</dd><dt>الموقِّع (X.509)</dt><dd dir="ltr" style="text-align:right">${esc(sg.signer)}</dd><dt>الختم الزمني</dt><dd>${esc(tsTxt)}</dd></dl>
+          <p class="hint" style="margin-bottom:0">أُعيد فحص الملف المحفوظ لدى الجامعة: بصمته وتوقيعه سليمان.${sg.selfSigned ? ' <b>تنبيه:</b> شهادة التوقيع ذاتية الإصدار ولم تصدر عن جهة اعتماد علنية، لذا قد تعرضها قارئات PDF «موقِّع غير معروف» رغم سلامة البصمة.' : ''}</p></div>`;
+      } else if (r.valid) res = `<div class="result good"><h3>الوثيقة صحيحة وصادرة عن الجامعة</h3><dl class="kv"><dt>النوع</dt><dd>${esc(r.service)}</dd><dt>الطالب</dt><dd>${esc(r.student)}</dd><dt>تاريخ الإصدار</dt><dd>${fmt(r.issuedAt)}</dd><dt>بصمة الوثيقة</dt><dd class="mono">${esc(r.hashPrefix)}…</dd></dl><p class="hint" style="margin-bottom:0">أُعيد حساب البصمة والتوقيع من سجل الجامعة وطابقا المخزَّنين وقت الإصدار.</p></div>`;
       else if (r.reason === 'tampered') res = '<div class="result badr"><h3>تحذير: بيانات الوثيقة لا تطابق السجل</h3>فشل التحقق من البصمة أو التوقيع، فقد تكون الوثيقة عُدِّلت.</div>';
       else if (r.reason === 'malformed') res = '<div class="result badr"><h3>صيغة الرمز غير صحيحة</h3>الصيغة المتوقعة: UV-XXXX-XXXX</div>';
       else res = '<div class="result badr"><h3>الوثيقة غير موجودة</h3>لا توجد وثيقة بهذا الرمز في سجلات الجامعة.</div>';
     }
     return `<div class="verify"><section class="card"><h2>التحقق من وثيقة صادرة</h2><p class="hint" style="margin-top:0">امسح رمز QR على الوثيقة أو اكتب الرمز المطبوع أسفلها. لا تُعرض بيانات الطالب الكاملة.</p>
-      <form class="vform" id="vform"><input id="vcode" type="text" placeholder="UV-XXXX-XXXX" autocomplete="off" value="${esc(S.vtext)}" aria-label="رمز التحقق"><button class="btn pri" type="submit">تحقق</button></form></section>${res}</div>`;
+      <form class="vform" id="vform"><input id="vcode" type="text" placeholder="UV-XXXX-XXXX" autocomplete="off" value="${esc(S.vtext)}" aria-label="رمز التحقق"><button class="btn pri" type="submit">تحقق</button></form>
+      <div class="vfile"><label class="hint">أو افحص ملف PDF نفسه: يُحسب SHA-256 على جهازك ولا يُرفع الملف<input type="file" id="vfile" accept="application/pdf,.pdf"></label></div></section>${res}</div>`;
   }
 
   function docHtml(d) {
@@ -381,7 +407,13 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (a === 'clearhold') { await api('POST', `/api/admin/holds/${d.id}/clear`, {}); await loadFor('admin'); render(); toast('تمت التسوية'); }
       else if (a === 'rule') { await api('POST', `/api/admin/rules/${d.id}/toggle`, { enabled: d.on === '1' }); await loadFor('admin'); render(); }
       else if (a === 'sttab') { S.stTab = d.t; S.err = ''; S.fieldErr = null; S.stEdit = null; if (d.t === 'list') await loadStudents(); render(); }
-      else if (a === 'stsel') { S.stSel = (await api('GET', '/api/students/' + d.id)).student; render(); }
+      else if (a === 'stsel') { const r = await api('GET', '/api/students/' + d.id); S.stSel = r.student; S.stCert = r.certificate; render(); }
+      else if (a === 'stcert') {
+        const res = await fetch(`/api/students/${S.stSel.id}/certificate.pdf`, { credentials: 'same-origin' });
+        if (!res.ok) { let m = 'تعذّر إصدار الشهادة.'; try { m = (await res.json()).message || m; } catch { /* */ } toast(m); return; }
+        const al = document.createElement('a'); al.href = URL.createObjectURL(await res.blob()); al.download = `enrollment-${S.stSel.studentNo}.pdf`; al.click(); setTimeout(() => URL.revokeObjectURL(al.href), 4000);
+        S.stCert = (await api('GET', '/api/students/' + S.stSel.id)).certificate; render();
+      }
       else if (a === 'stedit') { S.stEdit = S.stSel; S.stTab = 'edit'; S.err = ''; S.fieldErr = null; render(); window.scrollTo(0, 0); }
       else if (a === 'stcancel') { S.stTab = 'list'; S.stEdit = null; S.err = ''; S.fieldErr = null; render(); }
       else if (a === 'stclear') { S.newVals = {}; S.err = ''; S.fieldErr = null; render(); }
@@ -416,5 +448,13 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     if (code) { S.view = 'verify'; await doVerify(code); history.replaceState(null, '', location.pathname); }
     render();
   };
-  Object.assign(UA, { viewsFor, S, api, esc, fmt, dur, $, val, toast, render, guard, go, loadFor, can, pill, steps, detailsText, events, docHtml, verifyView, readFile, afterLogin, ROLE_LABEL });
+  document.addEventListener('change', async (e) => {
+    if (!e.target || e.target.id !== 'vfile' || !e.target.files[0]) return;
+    try {
+      const h = await crypto.subtle.digest('SHA-256', await e.target.files[0].arrayBuffer()), hex = [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, '0')).join('');
+      S.vres = await api('GET', '/api/verify-hash/' + hex); S.vtext = ''; render();
+      if (!S.vres.valid && S.vres.reason === 'not_found') toast('لا توجد شهادة بهذه البصمة؛ الملف مختلف عن النسخة الأصلية أو ليس من إصدار الجامعة');
+    } catch (err) { if (!err.status) throw err; toast(err.message); }
+  });
+  Object.assign(UA, { upload, mediaHtml, viewsFor, S, api, esc, fmt, dur, $, val, toast, render, guard, go, loadFor, can, pill, steps, detailsText, events, docHtml, verifyView, readFile, afterLogin, ROLE_LABEL });
 })();

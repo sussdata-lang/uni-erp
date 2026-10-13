@@ -2,6 +2,7 @@
 // الواجهتان (الطالب والموظف) هما نفسهما واجهتا النظام الحقيقي؛ تُبنى البيانات الأولية بمنطق الخادم الحقيقي،
 // ويحلّ محل fetch خادم وهمي داخل المتصفح (بيانات خيالية في الذاكرة فقط).
 //   node --disable-warning=ExperimentalWarning scripts/build-demo.js
+import { analytics, filterOptions } from '../server/services/analytics.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,17 +81,16 @@ const state = { options: registrationOptions(db, false), students, programs: lis
 const strip = (f) => fs.readFileSync(path.join(root, f), 'utf8').replace(/^export /gm, '');
 const qr = strip('server/qr.js').replace('[...Buffer.from(text, \'utf8\')]', '[...new TextEncoder().encode(text)]');
 const shim = fs.readFileSync(path.join(root, 'scripts/demo-shim.js'), 'utf8');
+state.analytics = { options: filterOptions(db), ...analytics(db) };            // لوحة الإحصاءات في العرض: لقطة ثابتة من بيانات العرض
 const data = JSON.stringify(state).replace(/</g, '\\u003c');
 const crestUri = 'data:image/svg+xml;base64,' + fs.readFileSync(path.join(root, 'public/brand/crest.svg')).toString('base64');   // الملف المستقل لا يرى /brand/ فيُضمَّن الشعار
 // الشعار يُضمَّن مرة واحدة فقط (حجمه كبير): متغير CSS + متغير JS تقرؤه القوالب
-const font = (f) => 'data:font/ttf;base64,' + fs.readFileSync(path.join(root, 'public/fonts', f)).toString('base64');
-const css = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8').replaceAll('url("/brand/crest.svg")', 'var(--crest-url)')
-  .replace('url(/fonts/al-mohanad.ttf)', `url(${font('al-mohanad.ttf')})`).replace('url(/fonts/AL-Mohanad-Bold-1.ttf)', `url(${font('AL-Mohanad-Bold-1.ttf')})`);
-const js = ['app.js', 'staff.js', 'student.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replaceAll('src="/brand/crest.svg"', 'src="${window.__CREST}"').replace(/<\/script/gi, '<\\/script'));
+const css = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8').replaceAll('url("/brand/crest.svg")', 'var(--crest-url)');
+const js = ['app.js', 'staff.js', 'student.js', 'import.js', 'dashboard.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replaceAll('src="/brand/crest.svg"', 'src="${window.__CREST}"').replace(/<\/script/gi, '<\\/script'));
 let html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
   .replace('<link rel="stylesheet" href="/style.css">', `<style>${css}\n.demo-bar{background:#fff4d6;color:#5b4300;font-size:13px;padding:6px 12px;border-bottom:1px solid #e7cf8a;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center}.demo-bar button{font:inherit;border:1px solid #c9a94e;background:#fff;color:#5b4300;border-radius:999px;padding:2px 12px;cursor:pointer}.demo-bar button[aria-pressed=true]{background:#5b4300;color:#fff}</style>`)
   .replace(/<script src="\/[a-z]+\.js" defer><\/script>\s*/g, '')
-  .replace('</body>', `<script>window.__CREST='${crestUri}';document.documentElement.style.setProperty('--crest-url','url('+window.__CREST+')');window.__DEMO__=${data};</script>\n<script>${qr}\n${shim}</script>\n<script>${js[0]}</script>\n<script>${js[1]}</script>\n<script>${js[2]}</script>\n<script>${js[3]}</script>\n</body>`);
+  .replace('</body>', () => `<script>window.__CREST='${crestUri}';document.documentElement.style.setProperty('--crest-url','url('+window.__CREST+')');window.__DEMO__=${data};</script>\n<script>${qr}\n${shim}</script>\n${js.map((c) => `<script>${c}</script>`).join('\n')}\n</body>`);
 fs.mkdirSync(path.join(root, 'demo'), { recursive: true });
 fs.rmSync(path.join(root, 'demo/registration-demo.html'), { force: true });
 fs.writeFileSync(path.join(root, 'demo/university-portal-demo.html'), html);

@@ -87,6 +87,7 @@
     if (path === '/api/services') return { services: D.services };
     if (path === '/api/programs') return { programs: st.programs };
     if (path === '/api/units/targets') return { targets: [] };
+    if (path === '/api/analytics') { staffOnly(); return D.analytics; }
     if (path === '/api/registration/options') return D.options;
     if (path === '/api/news' && method === 'GET') return { news: st.news.slice().sort((a, b) => (b.pinned - a.pinned) || (b.publishedAt - a.publishedAt) || b.id - a.id) };
     if (path === '/api/news' && method === 'POST') { staffOnly(); const t = String(body.title || '').trim(), b = String(body.body || '').trim(); if (t.length < 3) throw err(400, '«العنوان» يجب أن يكون بين 3 و150 حرفاً.', 'validation'); if (b.length < 3) throw err(400, '«النص» يجب أن يكون بين 3 و4000 حرف.', 'validation'); const id = nextId(st.news); st.news.push({ id, title: t, body: b, pinned: !!body.pinned, publishedAt: now() }); return { __status: 201, id }; }

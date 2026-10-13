@@ -1,6 +1,11 @@
-import { Router, HttpError, sendRaw } from './http.js';
+import { Router, HttpError, sendRaw, SECURITY_HEADERS as SEC } from './http.js';
 import { login, logout, publicUser, changePassword } from './services/auth.js';
 import { listStaff, createUser, updateUser, setUserActive, resetUserPassword } from './services/useradmin.js';
+import { runImport, IMPORT_PERM } from './services/importer.js';
+import { addUpload, addLink, deleteMedia, streamMedia } from './services/media.js';
+import { analytics, filterOptions, powerBiDataset } from './services/analytics.js';
+import { buildReportXlsx, buildDatasetXlsx, buildReportDocx } from './services/reports.js';
+import { issueEnrollmentCertificate, certFor, certSummary, readCertPdf, verifyEnrollment, verifyByHash } from './services/enrollcert.js';
 import { overview, createRole, updateRole, deleteRole, createUnit, updateUnit, createLink, deleteLink, linkedTargets } from './services/access.js';
 import { registrationOptions, registerStudent, listStudents, getStudent, updateStudent, resetStudentPassword, myProfile, updateOwnContact, listPrograms, addProgram, toggleProgram, listFaculties, addFaculty, toggleFaculty } from './services/students.js';
 import { listCourses, createCourse, toggleCourse, myGrades, gradesFor, enterGrade, listNews, createNews, deleteNews, createComplaint, listComplaints, respondComplaint } from './services/academics.js';
@@ -44,6 +49,11 @@ export function buildRouter(deps) {
   r.add('GET', '/api/news', (c) => c.json(200, { news: listNews(deps) }));
   r.add('POST', '/api/news', (c) => { need(c, 'news:manage'); c.json(201, createNews(deps, c.user, c.body, c.ip)); });
   r.add('DELETE', '/api/news/:id', (c) => { need(c, 'news:manage'); deleteNews(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
+  // وسائط الأخبار: رفع مباشر (جسم خام، النوع من البايتات)، رابط، حذف، وبثّ الملف مع Range
+  r.add('POST', '/api/news/:id/media', (c) => { need(c, 'news:manage'); c.json(201, addUpload(deps, c.user, c.params.id, c.body, c.query.caption, c.ip)); }, { raw: true, maxBody: 51 * 1024 * 1024 });
+  r.add('POST', '/api/news/:id/links', (c) => { need(c, 'news:manage'); c.json(201, addLink(deps, c.user, c.params.id, c.body.url, c.body.caption, c.ip)); });
+  r.add('DELETE', '/api/news/media/:id', (c) => { need(c, 'news:manage'); deleteMedia(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
+  r.add('GET', '/api/media/:id', (c) => { streamMedia(deps, c.req, c.res, c.params.id, SEC); });
   r.add('POST', '/api/complaints', (c) => { need(c, 'complaint:create'); c.json(201, createComplaint(deps, c.user, c.body, c.ip)); });
   r.add('GET', '/api/complaints', (c) => {
     if (!c.user.can('complaint:create') && !c.user.can('complaint:manage')) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden');
@@ -59,11 +69,13 @@ export function buildRouter(deps) {
     need(c, 'student:read');
     const s = getStudent(deps, c.params.id);
     audit(db, c.user, 'عرض ملف طالب', s.studentNo, c.ip);   // الملف يحوي بيانات شخصية: القراءة نفسها تُدقَّق
-    c.json(200, { student: s });
+    c.json(200, { student: s, certificate: certSummary(certFor(db, s.id)) });
   });
   r.add('PUT', '/api/students/:id', (c) => { need(c, 'student:update'); c.json(200, { student: updateStudent(deps, c.user, c.params.id, c.body, c.ip) }); });
   r.add('POST', '/api/students/:id/reset-password', async (c) => { need(c, 'student:reset_password'); c.json(200, await resetStudentPassword(deps, c.user, c.params.id, c.ip)); });
   r.add('GET', '/api/programs', (c) => { need(c, 'student:read'); c.json(200, { programs: listPrograms(db) }); });
+  // استيراد من Excel/CSV/SQL: commit=false فحص بلا كتابة، commit=true اعتماد
+  r.add('POST', '/api/import/:kind', async (c) => { const k = c.params.kind; need(c, IMPORT_PERM[k] ?? 'role:manage'); c.json(200, await runImport(deps, c.user, k, c.body, c.ip)); }, { maxBody: 15 * 1024 * 1024 });
   r.add('GET', '/api/faculties', (c) => { need(c, 'student:read'); c.json(200, { faculties: listFaculties(db) }); });
   r.add('POST', '/api/admin/faculties', (c) => { need(c, 'program:manage'); c.json(201, addFaculty(deps, c.user, c.body, c.ip)); });
   r.add('POST', '/api/admin/faculties/:id/toggle', (c) => { need(c, 'program:manage'); toggleFaculty(deps, c.user, c.params.id, !!c.body.enabled, c.ip); c.json(200, { ok: true }); });
@@ -93,6 +105,18 @@ export function buildRouter(deps) {
     const a = readAttachment(deps, c.user, c.params.id);
     sendRaw(c.res, 200, { 'Content-Type': a.mime, 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(a.name)}` }, a.buf);
   });
+  // ---- لوحة الإحصاءات والتصدير ----
+  r.add('GET', '/api/analytics', (c) => { need(c, 'stats:read'); c.json(200, { options: filterOptions(db), ...analytics(db, c.query) }); });
+  const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  r.add('GET', '/api/analytics/export.xlsx', (c) => {
+    need(c, 'stats:read');
+    const powerbi = c.query.kind === 'powerbi';
+    sendRaw(c.res, 200, { 'Content-Type': XLSX_MIME, 'Content-Disposition': `attachment; filename="${powerbi ? 'powerbi-dataset' : 'statistics-report'}.xlsx"` }, powerbi ? buildDatasetXlsx(db) : buildReportXlsx(db, c.query));
+  });
+  r.add('POST', '/api/analytics/export.docx', (c) => {
+    need(c, 'stats:read');
+    sendRaw(c.res, 200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': 'attachment; filename="statistics-report.docx"' }, buildReportDocx(db, c.body));
+  }, { maxBody: 14 * 1024 * 1024 });
   r.add('GET', '/api/stats', (c) => { need(c, 'stats:read'); c.json(200, { stats: stats(deps) }); });
 
   // ---- الوثائق والتحقق ----
@@ -104,10 +128,28 @@ export function buildRouter(deps) {
   });
   r.add('GET', '/api/verify/:code', (c) => {
     if (!limiter.check(`verify:${c.ip}`, 30, 60_000)) throw new HttpError(429, 'محاولات تحقق كثيرة؛ حاول بعد دقيقة.', 'rate_limited');
-    const res = verifyPublic(deps, c.params.code);
+    const res = verifyEnrollment(deps, c.params.code) ?? verifyPublic(deps, c.params.code);      // SC-… شهادة تسجيل، UV-… وثيقة طلب
     audit(db, { label: 'جهة خارجية', role: 'public' }, `تحقق من وثيقة: ${res.valid ? 'صحيحة' : res.reason}`, c.params.code.slice(0, 20), c.ip);
     c.json(200, res);
   }, { auth: false });
+  // التحقق ببصمة الملف: يحسب المتصفح SHA-256 للملف ولا يرفعه
+  r.add('GET', '/api/verify-hash/:sha', (c) => {
+    if (!limiter.check(`verify:${c.ip}`, 30, 60_000)) throw new HttpError(429, 'محاولات تحقق كثيرة؛ حاول بعد دقيقة.', 'rate_limited');
+    const res = verifyByHash(deps, c.params.sha);
+    audit(db, { label: 'جهة خارجية', role: 'public' }, `تحقق ببصمة ملف: ${res.valid ? 'صحيحة' : res.reason}`, String(c.params.sha).slice(0, 16), c.ip);
+    c.json(200, res);
+  }, { auth: false });
+  // شهادة التسجيل الموقَّعة: تُصدَر عند الطلب إن لم تكن قد صدرت بعد (مثلاً طلاب قدامى)
+  const sendCert = async (c, studentId, studentNo) => {
+    const row = await issueEnrollmentCertificate(deps, studentId);
+    audit(db, c.user, 'تنزيل شهادة تسجيل موقَّعة', studentNo, c.ip);
+    sendRaw(c.res, 200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="enrollment-${studentNo}.pdf"` }, readCertPdf(cfg, row));
+  };
+  r.add('GET', '/api/me/certificate', (c) => { need(c, 'profile:read_own'); c.json(200, { certificate: certSummary(certFor(db, c.user.id)) }); });
+  r.add('GET', '/api/me/certificate.pdf', async (c) => { need(c, 'profile:read_own'); await sendCert(c, c.user.id, c.user.student_no); });
+  r.add('GET', '/api/students/:id/certificate.pdf', async (c) => {
+    need(c, 'student:read'); const s = getStudent(deps, c.params.id); await sendCert(c, s.id, s.studentNo);
+  });
 
   // ---- التدقيق ----
   r.add('GET', '/api/audit', (c) => {

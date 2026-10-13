@@ -91,9 +91,14 @@
   };
   function newsTab() {
     return `<div class="grid2"><section class="card"><h2>نشر خبر</h2><form class="form" id="newsadd" style="border:0;margin:0;padding:0"><label>العنوان<input id="nw-title" maxlength="150" required></label>
-        <label>النص<textarea id="nw-body" rows="5" maxlength="4000" required></textarea></label><label style="display:flex;gap:8px;align-items:center;font-weight:500"><input id="nw-pin" type="checkbox" style="width:auto"> تثبيت في أعلى القائمة</label>
+        <label>النص<textarea id="nw-body" rows="5" maxlength="4000" required></textarea></label><label>صور أو فيديو (رفع مباشر)<input id="nw-files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label>
+        <label>روابط (رابط في كل سطر)<textarea id="nw-links" rows="3" dir="ltr" placeholder="https://youtu.be/...&#10;https://example.com/photo.jpg"></textarea></label>
+        <p class="small">الرفع: صور حتى 5 ميغابايت (jpg/png/webp/gif) وفيديو حتى 50 ميغابايت (mp4/webm). الروابط: صورة أو فيديو مباشر (https) أو يوتيوب أو فيميو. حتى 8 وسائط للخبر.</p>
+        <label style="display:flex;gap:8px;align-items:center;font-weight:500"><input id="nw-pin" type="checkbox" style="width:auto"> تثبيت في أعلى القائمة</label>
         <div class="actions" style="margin:0"><button class="btn pri" type="submit">نشر</button></div></form></section>
-      <section class="card"><h2>الأخبار المنشورة <span class="small">(${A.news.length})</span></h2>${A.news.length ? A.news.map((n) => `<article class="req"><div class="req-h"><b>${n.pinned ? '📌 ' : ''}${esc(n.title)}</b><button class="btn sm bad" data-act="newsdel" data-id="${n.id}">حذف</button></div><div class="no">${fmt(n.publishedAt)}</div><div class="hint" style="white-space:pre-wrap">${esc(n.body.length > 220 ? n.body.slice(0, 220) + '…' : n.body)}</div></article>`).join('') : '<div class="empty">لا أخبار بعد. ما تنشره يظهر لكل الطلاب في تطبيقهم.</div>'}</section></div>`;
+      <section class="card"><h2>الأخبار المنشورة <span class="small">(${A.news.length})</span></h2>${A.news.length ? A.news.map((n) => `<article class="req"><div class="req-h"><b>${n.pinned ? '📌 ' : ''}${esc(n.title)}</b><button class="btn sm bad" data-act="newsdel" data-id="${n.id}">حذف</button></div><div class="no">${fmt(n.publishedAt)}</div><div class="hint" style="white-space:pre-wrap">${esc(n.body.length > 220 ? n.body.slice(0, 220) + '…' : n.body)}</div>
+        ${n.media.length ? `<div class="news-media compact">${n.media.map((m) => `<figure>${UA.mediaHtml([m], { compact: true }).replace(/^<div[^>]*>|<\/div>$/g, '')}<button class="btn sm bad" data-act="nmdel" data-id="${m.id}">حذف</button></figure>`).join('')}</div>` : ''}
+        <div class="inline-form" style="margin-top:8px"><label>إضافة ملف<input type="file" id="nm-f-${n.id}" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><button class="btn sm" data-act="nmup" data-id="${n.id}">رفع</button><button class="btn sm" data-act="nmlink" data-id="${n.id}">إضافة رابط</button></div></article>`).join('') : '<div class="empty">لا أخبار بعد. ما تنشره يظهر لكل الطلاب في تطبيقهم.</div>'}</section></div>`;
   }
   function complaintsTab() {
     const fl = [['open', 'قيد المعالجة'], ['answered', 'تم الرد'], ['closed', 'مغلقة'], ['all', 'الكل']];
@@ -110,12 +115,22 @@
     cmtab: async (el, d) => { A.ctab = d.t; UA.render(); },
     cmpflt: async (el, d) => { A.cfilter = d.f; A.csel = null; await UA.loaders.comms(); UA.render(); },
     cmpsel: async (el, d) => { A.csel = Number(d.id); UA.render(); },
+    nmdel: async (el, d) => { if (!confirm('حذف هذا الوسيط؟')) return; try { await api('DELETE', '/api/news/media/' + d.id); await UA.loaders.comms(); UA.render(); } catch (e) { if (!e.status) throw e; toast(e.message); } },
+    nmup: async (el, d) => { const fl = document.getElementById('nm-f-' + d.id).files[0]; if (!fl) { toast('اختر ملفاً'); return; } try { await UA.upload(`/api/news/${d.id}/media`, fl); await UA.loaders.comms(); UA.render(); toast('أُضيف الملف'); } catch (e) { if (!e.status) throw e; toast(e.message); } },
+    nmlink: async (el, d) => { const u = prompt('الصق الرابط (صورة/فيديو مباشر، يوتيوب، فيميو)'); if (!u) return; try { await api('POST', `/api/news/${d.id}/links`, { url: u }); await UA.loaders.comms(); UA.render(); toast('أُضيف الرابط'); } catch (e) { if (!e.status) throw e; toast(e.message); } },
     newsdel: async (el, d) => { if (!confirm('حذف هذا الخبر نهائياً؟')) return; await api('DELETE', '/api/news/' + d.id); await UA.loaders.comms(); UA.render(); toast('حُذف الخبر'); },
   });
   Object.assign(UA.forms, {
     newsadd: async () => {
-      try { await api('POST', '/api/news', { title: val('nw-title'), body: val('nw-body'), pinned: document.getElementById('nw-pin').checked }); await UA.loaders.comms(); UA.render(); toast('نُشر الخبر'); }
-      catch (e) { if (!e.status) throw e; toast(e.message); }
+      try {
+        const files = [...document.getElementById('nw-files').files], links = val('nw-links').split(/\n/).map((x) => x.trim()).filter(Boolean);
+        for (const fl of files) if (fl.size > (fl.type.startsWith('video/') ? 50 : 5) * 1048576) { toast(`الملف «${fl.name}» أكبر من الحد المسموح`); return; }
+        const r = await api('POST', '/api/news', { title: val('nw-title'), body: val('nw-body'), pinned: document.getElementById('nw-pin').checked, links });
+        const failed = [];
+        for (const fl of files) { try { await UA.upload(`/api/news/${r.id}/media`, fl); } catch (e) { if (!e.status) throw e; failed.push(`${fl.name}: ${e.message}`); } }
+        await UA.loaders.comms(); UA.render();
+        toast(failed.length ? `نُشر الخبر، وتعذّر رفع: ${failed.join(' | ')}` : 'نُشر الخبر');
+      } catch (e) { if (!e.status) throw e; toast(e.message); }
     },
     cmpresp: async () => {
       try { await api('POST', `/api/complaints/${A.csel}/respond`, { response: val('cm-resp'), close: document.getElementById('cm-close').checked }); await UA.loaders.comms(); UA.render(); toast('أُرسل الرد'); }

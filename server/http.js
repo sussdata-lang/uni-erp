@@ -10,8 +10,8 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
   '.webmanifest': 'application/manifest+json; charset=utf-8', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
 
 // ترويسات أمنية: لا سكربتات إلا من الموقع نفسه، ولا تضمين في إطارات، ولا تخمين لأنواع الملفات
-const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+export const SECURITY_HEADERS = {
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
@@ -48,6 +48,12 @@ export class Router {
     }
     return { route: null, pathMatched };
   }
+}
+
+async function readRaw(req, limit) {
+  const chunks = []; let size = 0;
+  for await (const c of req) { size += c.length; if (size > limit) throw new HttpError(413, 'حجم الملف أكبر من المسموح.', 'too_large'); chunks.push(c); }
+  return Buffer.concat(chunks);
 }
 
 async function readBody(req, limit) {
@@ -96,7 +102,7 @@ export function makeHandler({ cfg, router, getUser }) {
       // كلمة المرور المؤقتة: لا شيء يعمل قبل تغييرها سوى تغييرها والخروج
       if (route.opts.auth !== false && user?.must_change_password && !route.opts.allowMustChange) throw new HttpError(403, 'يجب تغيير كلمة المرور المؤقتة أولاً.', 'password_change_required');
       const ctx = { req, res, ip, params, query: Object.fromEntries(url.searchParams), cookies, user, cfg,
-        body: req.method === 'GET' ? {} : await readBody(req, route.opts.maxBody ?? 64 * 1024),
+        body: req.method === 'GET' ? {} : route.opts.raw ? await readRaw(req, route.opts.maxBody) : await readBody(req, route.opts.maxBody ?? 64 * 1024),
         json: (status, obj, headers) => sendJson(res, status, obj, headers) };
       await route.handler(ctx);
     } catch (e) {

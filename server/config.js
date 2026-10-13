@@ -31,6 +31,7 @@ export function loadConfig(overrides = {}) {
     trustProxy: env.TRUST_PROXY === '1',
     universityName: env.UNIVERSITY_NAME ?? 'الجامعة السورية للعلوم الأمنية',
     publicUrl: env.PUBLIC_URL ?? null,
+    tsaUrl: env.TSA_URL || null,               // خادم ختم زمني RFC 3161 (اختياري)، مثل http://timestamp.digicert.com
     scryptN: Number(env.SCRYPT_N ?? 2 ** 15),
     maxAttachmentBytes: 2 * 1024 * 1024,
     signingKey: env.SIGNING_KEY || null,

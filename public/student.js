@@ -82,7 +82,7 @@
     return pageHead('علاماتي') + levelChips('grlvl', lv) + semSelect('grsem', T.gr.sem) + `<div class="m-list">${body}</div>`;
   }
   function newsPage() {
-    const body = !T.news ? sk(5) : (T.news.length ? T.news.map((n) => `<button class="m-news-r" data-act="newsopen" data-id="${n.id}"><span class="t"><small>${esc(day(n.publishedAt))}${n.pinned ? ' · 📌 مثبّت' : ''}</small><b>${esc(n.title)}</b><span class="ex">${esc(n.body.length > 90 ? n.body.slice(0, 90) + '…' : n.body)}</span></span></button>`).join('') : empty('لا أخبار حالياً'));
+    const body = !T.news ? sk(5) : (T.news.length ? T.news.map((n) => `<button class="m-news-r" data-act="newsopen" data-id="${n.id}"><span class="t"><small>${esc(day(n.publishedAt))}${n.pinned ? ' · 📌 مثبّت' : ''}</small><b>${esc(n.title)}</b><span class="ex">${esc(n.body.length > 90 ? n.body.slice(0, 90) + '…' : n.body)}</span></span>${(n.media.find((m) => m.kind === 'image') || {}).src ? `<img class="th" src="${esc(n.media.find((m) => m.kind === 'image').src)}" alt="" loading="lazy">` : (n.media.length ? '<span class="th vid-ic" aria-hidden="true">▶</span>' : '')}</button>`).join('') : empty('لا أخبار حالياً'));
     return pageHead('التعميمات والأخبار') + `<div class="m-list">${body}</div>`;
   }
   function reqCard(r) {
@@ -169,7 +169,7 @@
       row('البرنامج', st.program.faculty === st.program.name ? st.program.degree : `${st.program.degree} ${st.program.name}`), row('العام الدراسي', st.levelLabel), row('الرقم الوزاري', p.ministerial_no), row('الرقم الجامعي', st.studentNo)].join('')
       : '<p class="hint">لا يوجد ملف شخصي مسجَّل لحسابك بعد. راجع قسم شؤون الطلاب.</p>';
     layer().innerHTML = `<div class="m-drawer-bd" data-act="close"><aside class="m-drawer" dir="rtl" role="dialog" aria-modal="true" aria-label="الملف الشخصي" data-stop="1"><header><div class="m-avatar big"><span>${esc(S.me.name[0])}</span></div><div><b>${esc(S.me.name)}</b><small dir="ltr">${esc((p.email) || S.me.username)}</small></div></header>
-      <div class="m-info">${info}</div><nav class="m-acts"><button data-act="cmpopen">${IC.help}<span>إضافة شكوى جديدة</span></button><button data-act="acctopen">${IC.edit}<span>تعديل معلومات الحساب</span></button><button data-act="pwopen">${IC.lock}<span>تعديل كلمة المرور</span></button><button data-act="goverify2">${IC.shield}<span>التحقق من وثيقة</span></button><button class="out" data-act="logout">${IC.out}<span>تسجيل الخروج</span></button></nav></aside></div>`;
+      <div class="m-info">${info}</div><nav class="m-acts"><button data-act="cmpopen">${IC.help}<span>إضافة شكوى جديدة</span></button><button data-act="acctopen">${IC.edit}<span>تعديل معلومات الحساب</span></button><button data-act="pwopen">${IC.lock}<span>تعديل كلمة المرور</span></button><button data-act="certdl">${IC.doc}<span>تنزيل شهادة التسجيل الموقَّعة (PDF)</span></button><button data-act="goverify2">${IC.shield}<span>التحقق من وثيقة</span></button><button class="out" data-act="logout">${IC.out}<span>تسجيل الخروج</span></button></nav></aside></div>`;
   }
   const CST = { open: ['p-review', 'قيد المعالجة'], answered: ['p-approved', 'تم الرد'], closed: ['p-approved', 'مغلقة'] };
   async function drawComplaints(err = '') {
@@ -191,7 +191,7 @@
   }
   function drawNews(id) {
     const n = (T.news || []).find((x) => x.id === Number(id)); if (!n) return;
-    sheet('الخبر', `<article class="m-article"><small>${esc(fmt(n.publishedAt))}</small><h3>${esc(n.title)}</h3><p style="white-space:pre-wrap">${esc(n.body)}</p></article>`);
+    sheet('الخبر', `<article class="m-article"><small>${esc(fmt(n.publishedAt))}</small><h3>${esc(n.title)}</h3><p style="white-space:pre-wrap">${esc(n.body)}</p>${UA.mediaHtml(n.media)}</article>`);
   }
 
   /* ---------- الأحداث ---------- */
@@ -206,6 +206,13 @@
     cmpopen: async () => { await drawComplaints(); },
     acctopen: async () => { await ensureProfile(); drawAccount(); },
     pwopen: async () => { drawPassword(); },
+    certdl: async () => {
+      try {
+        const res = await fetch('/api/me/certificate.pdf', { credentials: 'same-origin' });
+        if (!res.ok) { let m = 'تعذّر تنزيل الشهادة.'; try { m = (await res.json()).message || m; } catch { /* */ } toast(m); return; }
+        const a = document.createElement('a'); a.href = URL.createObjectURL(await res.blob()); a.download = `enrollment-${S.me.username}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      } catch { toast('تعذّر تنزيل الشهادة.'); }
+    },
     goverify2: async () => { close(); S.view = 'verify'; UA.render(); window.scrollTo(0, 0); },
     close: async (el, d, e) => { if (el.classList.contains('m-drawer-bd') && e.target.closest('.m-drawer')) return; close(); },
     wzstart: async (el, d) => { T.wz = { step: d.k ? 2 : 1, k: d.k || null, vals: {}, file: null, err: '' }; drawWizard(); },

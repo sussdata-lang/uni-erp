@@ -26,14 +26,20 @@ function migrate(db) {
 }
 
 // معاملة ذرية: كل شيء أو لا شيء
+// معاملة قابلة للتداخل: الأولى BEGIN والمتداخلة SAVEPOINT (يستفيد منها الاستيراد: صف فاشل يُلغى وحده)
+const depth = new WeakMap();
 export function tx(db, fn) {
-  db.exec('BEGIN IMMEDIATE');
+  const d = depth.get(db) ?? 0, sp = `sp_${d}`;
+  db.exec(d === 0 ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${sp}`);
+  depth.set(db, d + 1);
   try {
     const r = fn();
-    db.exec('COMMIT');
+    depth.set(db, d);
+    db.exec(d === 0 ? 'COMMIT' : `RELEASE ${sp}`);
     return r;
   } catch (e) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+    depth.set(db, d);
+    try { db.exec(d === 0 ? 'ROLLBACK' : `ROLLBACK TO ${sp}; RELEASE ${sp}`); } catch { /* already rolled back */ }
     throw e;
   }
 }

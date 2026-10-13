@@ -133,14 +133,20 @@ test('تعديل الطالب لبيانات الاتصال فقط، والخد�
   assert.equal((await api('PUT', '/api/me/profile', { cookie: stu, body: { phone: 'abc', governorate: 'حلب', city: 'x', address: 'y' } })).status, 400);
   assert.equal((await api('PUT', '/api/me/profile', { cookie: staff, body: { phone: '0955000111' } })).status, 403);
 
-  const ex = await api('POST', '/api/requests', { cookie: stu, body: { service: 'excellence_year', details: { academic_year: '2026/2027' } } });
-  assert.equal(ex.status, 201, ex.text); assert.equal(ex.json.request.status, 'review');
-  const cl = await api('POST', '/api/requests', { cookie: stu, body: { service: 'campus_life', details: { kind: 'السكن الجامعي', reason: 'الإقامة خارج مدينة الجامعة' } } });
+  // «سنة الامتياز» محذوفة، و«الحياة الجامعية» بلا خيارات، و«طلب احتياج» يحمل الخيارات القديمة + «أخرى» والتوصيف
+  const svcs = (await api('GET', '/api/services', { cookie: stu })).json.services;
+  assert.ok(!svcs.some((s) => s.code === 'excellence_year'));
+  assert.deepEqual(svcs.find((s) => s.code === 'campus_life').fields, []);
+  const needs = svcs.find((s) => s.code === 'needs_request');
+  assert.equal(needs.label, 'طلب احتياج'); assert.ok(needs.fields.find((f) => f.name === 'need_type').options.includes('أخرى'));
+  assert.equal((await api('POST', '/api/requests', { cookie: stu, body: { service: 'excellence_year', details: { academic_year: '2026/2027' } } })).status, 400);
+  const cl = await api('POST', '/api/requests', { cookie: stu, body: { service: 'campus_life', details: {} } });
   assert.equal(cl.status, 201, cl.text);
   const ap = await api('POST', `/api/requests/${cl.json.request.id}/approve`, { cookie: staff });
   assert.equal(ap.status, 200); assert.equal(ap.json.request.document, null);               // الحياة الجامعية بلا وثيقة
-  const ap2 = await api('POST', `/api/requests/${ex.json.request.id}/approve`, { cookie: staff });
-  assert.ok(ap2.json.request.document.code);                                                 // سنة الامتياز بوثيقة موقعة
+  const nr = await api('POST', '/api/requests', { cookie: stu, body: { service: 'needs_request', details: { need_type: 'أخرى', reason: 'ظرف اجتماعي', description: 'أحتاج مقعداً في حافلة الجامعة' } } });
+  assert.equal(nr.status, 201, nr.text);
+  assert.equal((await api('POST', '/api/requests', { cookie: stu, body: { service: 'needs_request', details: { need_type: 'غير موجود', reason: 'ظرف اجتماعي', description: 'x' } } })).status, 400);
   assert.equal(verifyAuditChain(app.db).ok, true);
 });
 
