@@ -1,7 +1,7 @@
 /* واجهة الموظف: المواد والعلامات، والأخبار والشكاوى (تُضاف إلى نواة app.js عبر UA) */
 (function () {
   const UA = window.UA, { S, api, esc, fmt, val, toast } = UA;
-  const LV = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة', 'السابعة'];
+  const LV = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة'];
   const lvl = (n) => 'السنة ' + (LV[n - 1] || n);
   const sem = (n) => (n === 1 ? 'الفصل الأول' : 'الفصل الثاني');
   const defYear = () => { const d = new Date(), y = d.getMonth() >= 8 ? d.getFullYear() : d.getFullYear() - 1; return `${y}/${y + 1}`; };

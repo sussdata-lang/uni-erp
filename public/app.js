@@ -85,7 +85,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
 
   /* ---------- الشاشات ---------- */
   function loginView() {
-    return `<form class="login card" id="loginform"><div class="login-hero"><img class="crest" src="/brand/crest.svg" alt="شعار ${esc(S.uni)}"><h1>بوابة خدمات الطلاب</h1><div class="hint">${esc(S.uni)} · قسم شؤون الطلاب</div></div>
+    return `<form class="login card" id="loginform"><div class="login-hero"><img class="crest" src="/brand/crest.svg" alt="شعار ${esc(S.uni)}"><h1>نظام إدارة وأتمتة البيانات في الجامعة السورية للعلوم الأمنية</h1><div class="hint">${esc(S.uni)} · قسم شؤون الطلاب</div></div>
       ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
       <label>اسم المستخدم<input id="lg-u" autocomplete="username" required></label>
       <label>كلمة المرور<input id="lg-p" type="password" autocomplete="current-password" required></label>
@@ -106,7 +106,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const stats = st ? `<div class="stats"><div class="stat"><small>قيد المراجعة</small><b>${st.review}</b></div><div class="stat"><small>معتمدة</small><b>${st.approved}</b></div><div class="stat"><small>مرفوضة</small><b>${st.rejected}</b></div><div class="stat"><small>متوسط زمن الاعتماد</small><b style="font-size:20px">${st.avgApprovalMs ? dur(st.avgApprovalMs) : '-'}</b></div></div>
       ${st.slaBreaches ? `<p class="reason" style="margin-top:12px">${st.slaBreaches} طلب تجاوز مدة الخدمة المعتمدة (SLA).</p>` : ''}` : '';
 
-    const tabs = [['requests', can('request:decide') ? 'طابور الطلبات' : 'الطلبات']];
+    const tabs = [['requests', can('request:decide') ? 'سجل الطلبات' : 'الطلبات']];
     if (can('student:read')) tabs.push(['list', 'سجل الطلاب']);
     if (can('student:register')) tabs.push(['new', 'تسجيل طالب جديد']);
     const cur = S.stTab === 'edit' ? 'list' : S.stTab;
@@ -143,7 +143,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
 
   function adminView() {
-    const tabs = [['holds', 'الذمم والموانع', can('holds:manage')], ['rules', 'قواعد الفحص الآلي', can('rules:manage')], ['programs', 'الكليات والبرامج', can('program:manage')]].filter((t) => t[2]);
+    const tabs = [['holds', 'اللجنة التأديبية', can('holds:manage')], ['rules', 'قواعد الفحص الآلي', can('rules:manage')], ['programs', 'الكليات والبرامج', can('program:manage')]].filter((t) => t[2]);
     if (!tabs.some((t) => t[0] === S.adminTab)) S.adminTab = tabs[0] ? tabs[0][0] : 'holds';
     const bar = `<div class="sub-tabs">${tabs.map((t) => `<button class="chip" data-act="atab" data-t="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}</button>`).join('')}</div>`;
     const a = S.admin;
@@ -173,7 +173,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   function mustChangeView() {
     return `<form class="login card" id="pwform"><h1>تغيير كلمة المرور</h1><div class="hint">سُجِّل دخولك بكلمة مرور مؤقتة. اختر كلمة مرور خاصة بك للمتابعة.</div>
       ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
-      <label>كلمة المرور المؤقتة<input id="pw-cur" type="password" autocomplete="current-password" required></label>
+      <label>كلمة المرور المؤقتة المعطى سابقا<input id="pw-cur" type="password" autocomplete="current-password" required></label>
       <label>كلمة المرور الجديدة<input id="pw-new" type="password" autocomplete="new-password" required minlength="10"></label>
       <label>تأكيد كلمة المرور الجديدة<input id="pw-new2" type="password" autocomplete="new-password" required minlength="10"></label>
       <div class="small">10 أحرف على الأقل، وتحوي حروفاً وأرقاماً.</div>
