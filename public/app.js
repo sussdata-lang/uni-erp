@@ -97,10 +97,30 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const tabs = viewsFor(S.me?.role ?? 'public').map((t) => `<button class="tab" role="tab" data-act="view" data-v="${t[0]}" aria-selected="${S.view === t[0]}">${t[1]}</button>`).join('');
     const who = S.me ? `<div class="who"><span><b>${esc(S.me.name)}</b> · ${esc(S.me.roleLabel || ROLE_LABEL[S.me.role])}${S.me.unit ? ` · ${esc(S.me.unit.name)}` : ''}</span><button class="btn sm" data-act="logout">خروج</button></div>`
       : '<div class="who"><button class="btn sm" data-act="tologin">تسجيل الدخول</button></div>';
-    return `<header class="top"><div class="wrap"><div class="brand"><img class="crest" src="/brand/crest.svg" alt="" width="40" height="48"><div class="t"><b>بوابة خدمات الطلاب</b><span>${esc(S.uni)} · قسم شؤون الطلاب</span></div></div>
+    return `<header class="top"><div class="wrap"><div class="brand"><img class="crest" src="/brand/crest.svg" alt="" width="40" height="48"><div class="t"><b>نظام إدارة وأتمتة البيانات في الجامعة السورية للعلوم الأمنية</b><span>${esc(S.uni)} · قسم شؤون الطلاب</span></div></div>
       <div class="tabs" role="tablist">${tabs}</div>${who}</div></header><div class="wrap" style="padding-top:16px">`;
   }
 
+  function editCard(a) {
+    const e = S.edit; if (!e) return '';
+    if (e.type === 'fac') {
+      const f = (a.faculties || []).find((x) => x.id === e.id); if (!f) return '';
+      const KINDS = { college: 'كلية', institute: 'معهد', center: 'مركز' };
+      return `<section class="card" id="editcard"><h2>تعديل جهة: ${esc(f.name)}</h2><div class="inline-form">
+        <label>الاسم بالعربية<input id="ed-name" maxlength="80" value="${esc(f.name)}"></label>
+        <label>الاسم بالإنكليزية<input id="ed-en" maxlength="100" dir="ltr" value="${esc(f.nameEn)}"></label>
+        <label>الرمز<input id="ed-code" maxlength="8" dir="ltr" value="${esc(f.code)}"${f.students ? ' disabled' : ''}></label>
+        <label>النوع<select id="ed-kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${f.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+        <button class="btn pri" data-act="facsave" data-id="${f.id}">حفظ</button><button class="btn" data-act="editcancel">إلغاء</button></div>
+        ${f.students ? '<p class="small">الرمز مقفل لأن في هذه الجهة طلاباً صدرت أرقامهم الجامعية به.</p>' : ''}</section>`;
+    }
+    const p = (a.programs || []).find((x) => x.id === e.id); if (!p) return '';
+    return `<section class="card" id="editcard"><h2>تعديل برنامج: ${esc(p.name)} <span class="small">(${esc(p.faculty)})</span></h2><div class="inline-form">
+      <label>اسم البرنامج<input id="ed-name" maxlength="80" value="${esc(p.name)}"></label>
+      <label>الدرجة<input id="ed-deg" maxlength="30" value="${esc(p.degree)}"></label>
+      <label>المدة (سنوات)<input id="ed-years" type="number" min="1" max="4" value="${p.years}"></label>
+      <button class="btn pri" data-act="progsave" data-id="${p.id}">حفظ</button><button class="btn" data-act="editcancel">إلغاء</button></div></section>`;
+  }
   function affairsView() {
     const st = S.stats;
     const stats = st ? `<div class="stats"><div class="stat"><small>قيد المراجعة</small><b>${st.review}</b></div><div class="stat"><small>معتمدة</small><b>${st.approved}</b></div><div class="stat"><small>مرفوضة</small><b>${st.rejected}</b></div><div class="stat"><small>متوسط زمن الاعتماد</small><b style="font-size:20px">${st.avgApprovalMs ? dur(st.avgApprovalMs) : '-'}</b></div></div>
@@ -120,9 +140,9 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const list = S.requests.filter((r) => S.filter === 'all' || r.status === S.filter);
     const sel = S.requests.find((r) => r.id === S.sel);
     const rows = list.map((r) => `<tr class="row" tabindex="0" data-act="sel" data-id="${r.id}" aria-selected="${S.sel === r.id}"><td>${esc(r.service.label)}${r.unit ? `<div class="small">عند: ${esc(r.unit.name)}</div>` : ''}</td><td>${esc(r.student.name)}</td><td>${pill(r)}</td><td class="hint" style="white-space:nowrap">${fmt(r.createdAt)}</td></tr>`).join('');
-    return `<div class="grid2"><section class="card"><h2>طابور الطلبات</h2><div class="chips">${fl.map((f) => `<button class="chip" data-act="flt" data-f="${f[0]}" aria-pressed="${S.filter === f[0]}">${f[1]}</button>`).join('')}</div>
+    return `<div class="grid2"><section class="card"><h2>سجل الطلبات</h2><div class="chips">${fl.map((f) => `<button class="chip" data-act="flt" data-f="${f[0]}" aria-pressed="${S.filter === f[0]}">${f[1]}</button>`).join('')}</div>
       <div class="tbl-wrap"><table><thead><tr><th>الخدمة</th><th>الطالب</th><th>الحالة</th><th>التاريخ</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">لا طلبات في هذا التصنيف.</td></tr>'}</tbody></table></div></section>
-      <section class="card"><h2>تفاصيل الطلب</h2>${sel ? staffDetail(sel, canDecide) : '<div class="empty">اختر طلباً من الطابور.</div>'}</section></div>`;
+      <section class="card"><h2>تفاصيل الطلب</h2>${sel ? staffDetail(sel, canDecide) : '<div class="empty">اختر طلباً من السجلات.</div>'}</section></div>`;
   }
   function staffDetail(r, canDecide) {
     const auto = r.rejectedBy === 'auto';
@@ -148,23 +168,23 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const bar = `<div class="sub-tabs">${tabs.map((t) => `<button class="chip" data-act="atab" data-t="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}</button>`).join('')}</div>`;
     const a = S.admin;
     if (S.adminTab === 'holds') {
-      return bar + `<section class="card"><h2>تسجيل ذمة على طالب</h2><div class="inline-form"><label>الرقم الجامعي<input id="h-no" placeholder="CSS-2026-0001" dir="ltr"></label>
+      return bar + `<section class="card"><h2>تسجيل عقوبة على طالب</h2><div class="inline-form"><label>الرقم الجامعي<input id="h-no" placeholder="CSS-2026-0001" dir="ltr"></label>
         <label>النوع<select id="h-type"><option value="financial">مالية</option><option value="disciplinary">تأديبية</option><option value="library">مكتبة</option></select></label><label>ملاحظة<input id="h-note" maxlength="200"></label><button class="btn pri" data-act="addhold">تسجيل</button></div></section>
-        <section class="card" style="margin-top:16px"><h2>الذمم</h2><div class="tbl-wrap"><table><thead><tr><th>الطالب</th><th>النوع</th><th>الملاحظة</th><th>الحالة</th><th></th></tr></thead><tbody>${(a.holds || []).map((h) => `<tr><td>${esc(h.student)} <span class="small">${esc(h.studentNo)}</span></td><td>${{ financial: 'مالية', disciplinary: 'تأديبية', library: 'مكتبة' }[h.holdType]}</td><td>${esc(h.note)}</td><td>${h.active ? '<span class="bad-t">قائمة</span>' : '<span class="ok-t">مسددة</span>'}</td><td style="white-space:nowrap">${h.active ? `<button class="btn sm" data-act="clearhold" data-id="${h.id}">تسوية</button> ` : ''}<button class="btn sm" data-act="edithold" data-id="${h.id}">تعديل</button> <button class="btn sm bad" data-act="delhold" data-id="${h.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">لا ذمم مسجلة.</td></tr>'}</tbody></table></div></section>`;
+        <section class="card" style="margin-top:16px"><h2>العقوبات</h2><div class="tbl-wrap"><table><thead><tr><th>الطالب</th><th>النوع</th><th>الملاحظة</th><th>الحالة</th><th></th></tr></thead><tbody>${(a.holds || []).map((h) => `<tr><td>${esc(h.student)} <span class="small">${esc(h.studentNo)}</span></td><td>${{ financial: 'مالية', disciplinary: 'تأديبية', library: 'مكتبة' }[h.holdType]}</td><td>${esc(h.note)}</td><td>${h.active ? '<span class="bad-t">قائمة</span>' : '<span class="ok-t">مسددة</span>'}</td><td style="white-space:nowrap">${h.active ? `<button class="btn sm" data-act="clearhold" data-id="${h.id}">تسوية</button> ` : ''}<button class="btn sm" data-act="edithold" data-id="${h.id}">تعديل</button> <button class="btn sm bad" data-act="delhold" data-id="${h.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">لا ذمم مسجلة.</td></tr>'}</tbody></table></div></section>`;
     }
     if (S.adminTab === 'rules') {
       return bar + `<section class="card"><h2>قواعد الفحص الآلي</h2><p class="hint">تُطبَّق على كل طلب قبل وصوله للموظف. التعطيل والتفعيل والتعديل والحذف تُسجَّل في سجل التدقيق.</p><div class="tbl-wrap"><table><thead><tr><th>القاعدة</th><th>الخدمة</th><th>رسالة الرفض</th><th></th></tr></thead><tbody>${(a.rules || []).map((r) => `<tr><td class="mono">${esc(r.kind)} ${esc(r.params)}</td><td>${esc(r.service ?? 'كل الخدمات')}</td><td>${esc(r.message)}</td><td style="white-space:nowrap"><button class="btn sm" data-act="rule" data-id="${r.id}" data-on="${r.enabled ? 0 : 1}">${r.enabled ? 'تعطيل' : 'تفعيل'}</button> <button class="btn sm" data-act="editrule" data-id="${r.id}">تعديل</button> <button class="btn sm bad" data-act="delrule" data-id="${r.id}">حذف</button></td></tr>`).join('')}</tbody></table></div></section>`;
     }
     const KIND = { college: 'كلية', institute: 'معهد', center: 'مركز' };
     const facs = a.faculties || [];
-    return bar + `<section class="card"><h2>الكليات والمعاهد والمراكز</h2><p class="hint">الرمز اللاتيني (الأحرف الأولى من الاسم الإنكليزي) يبدأ به اسم المستخدم والرقم الجامعي للطلاب الجدد، مثل <span class="mono" dir="ltr">CSS-2026-0001</span>. الطلاب الحاليون يحتفظون بأرقامهم.</p>
+    return bar + editCard(a) + `<section class="card"><h2>الكليات والمعاهد والمراكز</h2><p class="hint">الرمز اللاتيني (الأحرف الأولى من الاسم الإنكليزي) يبدأ به اسم المستخدم والرقم الجامعي للطلاب الجدد، مثل <span class="mono" dir="ltr">CSS-2026-0001</span>. الطلاب الحاليون يحتفظون بأرقامهم.</p>
       <div class="tbl-wrap"><table><thead><tr><th>الجهة</th><th>الاسم الإنكليزي</th><th>الرمز</th><th>البرامج</th><th>الطلاب</th><th></th></tr></thead><tbody>${facs.map((f) => `<tr><td>${esc(f.name)} <span class="small">(${KIND[f.kind]})</span></td><td dir="ltr" style="text-align:right">${esc(f.nameEn)}</td><td class="mono">${esc(f.code)}</td><td>${f.programs}</td><td>${f.students}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-act="factoggle" data-id="${f.id}" data-on="${f.active ? 0 : 1}">${f.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn sm" data-act="facedit" data-id="${f.id}">تعديل</button> <button class="btn sm bad" data-act="facdel" data-id="${f.id}">حذف</button></td></tr>`).join('')}</tbody></table></div></section>
       <section class="card" style="margin-top:16px"><h2>إضافة جهة</h2><div class="inline-form"><label>الاسم بالعربية<input id="fc-name" maxlength="80"></label><label>الاسم بالإنكليزية<input id="fc-en" maxlength="100" dir="ltr" placeholder="College of ..."></label>
         <label>الرمز (اختياري)<input id="fc-code" maxlength="8" dir="ltr" placeholder="يُولَّد تلقائياً"></label><label>النوع<select id="fc-kind"><option value="college">كلية</option><option value="institute">معهد</option><option value="center">مركز</option></select></label><button class="btn pri" data-act="addfac">إضافة</button></div>
         <p class="small">تُنشأ للجهة الجديدة برنامج أساسي يحمل اسمها، ويمكن إضافة برامج أخرى تحتها.</p></section>
       <section class="card" style="margin-top:16px"><h2>برنامج أكاديمي جديد</h2><div class="inline-form"><label>الكلية / المعهد<select id="pg-fac">${facs.filter((f) => f.active).map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select></label><label>البرنامج<input id="pg-name" maxlength="80"></label><label>الدرجة<input id="pg-deg" value="بكالوريوس" maxlength="30"></label>
-        <label>المدة (سنوات)<input id="pg-years" type="number" min="1" max="7" value="4"></label><button class="btn pri" data-act="addprog">إضافة</button></div><p class="small">البرامج المعطَّلة تختفي من نموذج التسجيل، ويبقى الطلاب المسجَّلون فيها.</p></section>
+        <label>المدة (سنوات)<input id="pg-years" type="number" min="1" max="4" value="4"></label><button class="btn pri" data-act="addprog">إضافة</button></div><p class="small">البرامج المعطَّلة تختفي من نموذج التسجيل، ويبقى الطلاب المسجَّلون فيها.</p></section>
       <section class="card" style="margin-top:16px"><h2>البرامج</h2><div class="tbl-wrap"><table><thead><tr><th>الجهة</th><th>البرنامج</th><th>المدة</th><th>الطلاب</th><th></th></tr></thead><tbody>${(a.programs || []).map((p) => `<tr${p.active ? '' : ' style="opacity:.55"'}><td>${esc(p.faculty)}${p.facultyCode ? ` <span class="mono small">${esc(p.facultyCode)}</span>` : ''}</td><td>${p.faculty === p.name ? esc(p.degree) : `${esc(p.degree)} ${esc(p.name)}`}</td><td>${p.years}</td><td>${p.students}</td><td style="white-space:nowrap"><button class="btn sm" data-act="progtoggle" data-id="${p.id}" data-on="${p.active ? 0 : 1}">${p.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn sm" data-act="progedit" data-id="${p.id}">تعديل</button> <button class="btn sm bad" data-act="progdel" data-id="${p.id}">حذف</button></td></tr>`).join('')}</tbody></table></div></section>`;
   }
 
@@ -247,7 +267,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
   function studentDetail(st) {
     return `<div class="me"><div class="avatar">${esc(st.name[0])}</div><div><b>${esc(st.name)}</b><small class="mono">${esc(st.studentNo)}</small></div></div>
-      <div style="margin:8px 0">${spill(st.status, st.statusLabel)} ${st.activeHolds ? `<span class="pill p-rejected">${st.activeHolds} ذمة قائمة</span>` : ''}</div>
+      <div style="margin:8px 0">${spill(st.status, st.statusLabel)} ${st.activeHolds ? `<span class="pill p-rejected">${st.activeHolds} عقوبة قائمة</span>` : ''}</div>
       <div class="actions no-print"><button class="btn pri sm" data-act="stedit">تعديل</button><button class="btn sm" data-act="stpw">إعادة تعيين كلمة المرور</button><button class="btn sm" data-act="stcert">شهادة التسجيل الموقَّعة (PDF)</button>${can('student:delete') ? '<button class="btn sm bad" data-act="stdel">حذف الطالب</button>' : ''}</div>${S.stCert ? `<p class="small">رمز التحقق <span class="mono" dir="ltr">${esc(S.stCert.code)}</span> · ${S.stCert.tsaStatus === 'rfc3161' ? 'ختم زمني موثوق' : S.stCert.tsaStatus === 'failed' ? 'تعذّر الختم الموثوق' : 'ختم زمني محلي'} · بصمة <span class="mono" dir="ltr">${esc(S.stCert.pdfSha256.slice(0, 16))}…</span>${S.stCert.selfSigned ? ' · شهادة ذاتية' : ''}</p>` : ''}
       ${relatedRequests(st)}${profileKv(st)}<p class="small">سُجِّل ${fmt(st.createdAt)} · آخر تعديل ${fmt(st.updatedAt)}</p>`;
   }
@@ -402,17 +422,17 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
         $('#layer').innerHTML = `<div class="overlay" dir="rtl" data-act="close"><div class="sheet"><div class="sheet-bar"><button class="btn" data-act="close">إغلاق</button><button class="btn pri" data-act="copy" data-c="${esc(d.c)}">نسخ رمز التحقق</button></div>${docHtml(r.document)}</div></div>`;
       }
       else if (a === 'copy') { try { await navigator.clipboard.writeText(d.c); toast('تم نسخ الرمز'); } catch { toast('الرمز: ' + d.c); } }
-      else if (a === 'atab') { S.adminTab = d.t; render(); }
-      else if (a === 'addhold') { await api('POST', '/api/admin/holds', { studentNo: val('h-no'), holdType: val('h-type'), note: val('h-note') }); await loadFor('admin'); render(); toast('سُجّلت الذمة'); }
+      else if (a === 'atab') { S.adminTab = d.t; S.edit = null; render(); }
+      else if (a === 'addhold') { await api('POST', '/api/admin/holds', { studentNo: val('h-no'), holdType: val('h-type'), note: val('h-note') }); await loadFor('admin'); render(); toast('سُجّلت العقوبة'); }
       else if (a === 'clearhold') { await api('POST', `/api/admin/holds/${d.id}/clear`, {}); await loadFor('admin'); render(); toast('تمت التسوية'); }
       else if (a === 'rule') { await api('POST', `/api/admin/rules/${d.id}/toggle`, { enabled: d.on === '1' }); await loadFor('admin'); render(); }
       else if (a === 'edithold') {
         const h = S.admin.holds.find((x) => x.id === Number(d.id)); if (!h) return;
-        const note = prompt('ملاحظة الذمة', h.note || ''); if (note === null) return;
-        const tp = prompt('نوع الذمة: financial (مالية) / disciplinary (تأديبية) / library (مكتبة)', h.holdType); if (tp === null) return;
-        await api('PUT', `/api/admin/holds/${d.id}`, { note, holdType: tp.trim() }); await loadFor('admin'); render(); toast('حُفظ تعديل الذمة');
+        const note = prompt('ملاحظة العقوبة', h.note || ''); if (note === null) return;
+        const tp = prompt('نوع العقوبة: financial (مالية) / disciplinary (تأديبية) / library (مكتبة)', h.holdType); if (tp === null) return;
+        await api('PUT', `/api/admin/holds/${d.id}`, { note, holdType: tp.trim() }); await loadFor('admin'); render(); toast('حُفظ تعديل العقوبة');
       }
-      else if (a === 'delhold') { if (!confirm('حذف سجل هذه الذمة نهائياً؟ (للتسوية دون حذف استخدم «تسوية»)')) return; await api('DELETE', `/api/admin/holds/${d.id}`); await loadFor('admin'); render(); toast('حُذفت الذمة'); }
+      else if (a === 'delhold') { if (!confirm('حذف سجل هذه العقوبة نهائياً؟ (للتسوية دون حذف استخدم «تسوية»)')) return; await api('DELETE', `/api/admin/holds/${d.id}`); await loadFor('admin'); render(); toast('حُذفت العقوبة'); }
       else if (a === 'editrule') {
         const r = S.admin.rules.find((x) => x.id === Number(d.id)); if (!r) return;
         const message = prompt('رسالة الرفض التي تظهر للطالب', r.message); if (message === null) return;
@@ -420,20 +440,19 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
         await api('PUT', `/api/admin/rules/${d.id}`, { message, params }); await loadFor('admin'); render(); toast('حُفظت القاعدة');
       }
       else if (a === 'delrule') { if (!confirm('حذف هذه القاعدة نهائياً؟ لن يُطبَّق هذا الفحص على الطلبات بعد الآن (للإيقاف المؤقت استخدم «تعطيل»).')) return; await api('DELETE', `/api/admin/rules/${d.id}`); await loadFor('admin'); render(); toast('حُذفت القاعدة'); }
-      else if (a === 'facedit') {
-        const f = S.admin.faculties.find((x) => x.id === Number(d.id)); if (!f) return;
-        const name = prompt('الاسم بالعربية', f.name); if (name === null) return;
-        const nameEn = prompt('الاسم بالإنكليزية', f.nameEn); if (nameEn === null) return;
-        const code = f.students ? f.code : prompt('الرمز (يُغيَّر فقط إن لم يكن فيها طلاب)', f.code); if (code === null) return;
-        await api('PUT', `/api/admin/faculties/${d.id}`, { name, nameEn, code }); S.reg = null; await loadFor('admin'); render(); toast('حُفظ تعديل الجهة');
+      else if (a === 'facedit' || a === 'progedit') {
+        S.edit = { type: a === 'facedit' ? 'fac' : 'prog', id: Number(d.id) }; render();
+        const c = document.getElementById('editcard'); if (c) c.scrollIntoView({ block: 'center' });
       }
-      else if (a === 'facdel') { const f = S.admin.faculties.find((x) => x.id === Number(d.id)); if (!f || !confirm(`حذف «${f.name}» وبرامجها نهائياً؟ (لا يُقبل الحذف إن كان فيها طلاب أو مقررات)`)) return; await api('DELETE', `/api/admin/faculties/${d.id}`); S.reg = null; await loadFor('admin'); render(); toast('حُذفت الجهة'); }
-      else if (a === 'progedit') {
-        const p = S.admin.programs.find((x) => x.id === Number(d.id)); if (!p) return;
-        const name = prompt('اسم البرنامج', p.name); if (name === null) return;
-        const degree = prompt('الدرجة', p.degree); if (degree === null) return;
-        const years = prompt('المدة بالسنوات (1-7)', p.years); if (years === null) return;
-        await api('PUT', `/api/admin/programs/${d.id}`, { name, degree, years: Number(years) }); S.reg = null; await loadFor('admin'); render(); toast('حُفظ تعديل البرنامج');
+      else if (a === 'editcancel') { S.edit = null; render(); }
+      else if (a === 'facsave') {
+        const f = S.admin.faculties.find((x) => x.id === Number(d.id)); if (!f) return;
+        await api('PUT', `/api/admin/faculties/${d.id}`, { name: val('ed-name'), nameEn: val('ed-en'), code: f.students ? f.code : val('ed-code'), kind: val('ed-kind') });
+        S.edit = null; S.reg = null; await loadFor('admin'); render(); toast('حُفظ تعديل الجهة');
+      }
+      else if (a === 'progsave') {
+        await api('PUT', `/api/admin/programs/${d.id}`, { name: val('ed-name'), degree: val('ed-deg'), years: Number(val('ed-years')) });
+        S.edit = null; S.reg = null; await loadFor('admin'); render(); toast('حُفظ تعديل البرنامج');
       }
       else if (a === 'progdel') { const p = S.admin.programs.find((x) => x.id === Number(d.id)); if (!p || !confirm(`حذف البرنامج «${p.name}» نهائياً؟ (لا يُقبل الحذف إن كان فيه طلاب أو مقررات)`)) return; await api('DELETE', `/api/admin/programs/${d.id}`); S.reg = null; await loadFor('admin'); render(); toast('حُذف البرنامج'); }
       else if (a === 'stdel') {

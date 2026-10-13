@@ -11,7 +11,7 @@
 
   const bar = (tabs, cur, act) => `<div class="sub-tabs no-print" role="tablist">${tabs.map((t) => `<button class="chip" role="tab" data-act="${act}" data-t="${t[0]}" aria-pressed="${cur === t[0]}">${t[1]}</button>`).join('')}</div>`;
   const progOpts = (sel) => A.programs.map((p) => `<option value="${p.id}"${String(p.id) === String(sel) ? ' selected' : ''}>${esc(p.label || p.name)}</option>`).join('');
-  const lvlOpts = (sel, all) => (all ? '<option value="">كل السنوات</option>' : '') + [1, 2, 3, 4, 5, 6, 7].map((n) => `<option value="${n}"${String(n) === String(sel) ? ' selected' : ''}>${lvl(n)}</option>`).join('');
+  const lvlOpts = (sel, all) => (all ? '<option value="">كل السنوات</option>' : '') + [1, 2, 3, 4, 5].map((n) => `<option value="${n}"${String(n) === String(sel) ? ' selected' : ''}>${lvl(n)}</option>`).join('');
 
   /* ---------- المواد والعلامات ---------- */
   async function loadCourses() {
