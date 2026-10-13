@@ -1,14 +1,15 @@
 import { Router, HttpError, sendRaw, SECURITY_HEADERS as SEC } from './http.js';
 import { login, logout, publicUser, changePassword } from './services/auth.js';
-import { listStaff, createUser, updateUser, setUserActive, resetUserPassword } from './services/useradmin.js';
+import { listStaff, createUser, updateUser, setUserActive, resetUserPassword, deleteUser } from './services/useradmin.js';
+import { updateHold, deleteHold, updateRule, deleteRule } from './services/admindata.js';
 import { runImport, IMPORT_PERM } from './services/importer.js';
 import { addUpload, addLink, deleteMedia, streamMedia } from './services/media.js';
-import { analytics, filterOptions, powerBiDataset } from './services/analytics.js';
-import { buildReportXlsx, buildDatasetXlsx, buildReportDocx } from './services/reports.js';
+import { analytics, filterOptions } from './services/analytics.js';
+import { buildReportXlsx, buildReportDocx } from './services/reports.js';
 import { issueEnrollmentCertificate, certFor, certSummary, readCertPdf, verifyEnrollment, verifyByHash } from './services/enrollcert.js';
-import { overview, createRole, updateRole, deleteRole, createUnit, updateUnit, createLink, deleteLink, linkedTargets } from './services/access.js';
-import { registrationOptions, registerStudent, listStudents, getStudent, updateStudent, resetStudentPassword, myProfile, updateOwnContact, listPrograms, addProgram, toggleProgram, listFaculties, addFaculty, toggleFaculty } from './services/students.js';
-import { listCourses, createCourse, toggleCourse, myGrades, gradesFor, enterGrade, listNews, createNews, deleteNews, createComplaint, listComplaints, respondComplaint } from './services/academics.js';
+import { overview, createRole, updateRole, deleteRole, createUnit, updateUnit, deleteUnit, createLink, deleteLink, linkedTargets } from './services/access.js';
+import { registrationOptions, registerStudent, listStudents, getStudent, updateStudent, resetStudentPassword, myProfile, updateOwnContact, listPrograms, addProgram, toggleProgram, listFaculties, addFaculty, toggleFaculty, updateFaculty, deleteFaculty, updateProgram, deleteProgram, deleteStudent } from './services/students.js';
+import { listCourses, createCourse, toggleCourse, updateCourse, deleteCourse, myGrades, gradesFor, enterGrade, deleteGrade, listNews, createNews, updateNews, deleteNews, createComplaint, listComplaints, respondComplaint, deleteComplaint } from './services/academics.js';
 import { createRequest, listRequests, getRequest, decide, forwardRequest, stats, readAttachment } from './services/requests.js';
 import { getDocument, verifyPublic } from './services/documents.js';
 import { audit, verifyAuditChain } from './audit.js';
@@ -42,12 +43,16 @@ export function buildRouter(deps) {
     c.json(200, listCourses(deps, c.user, c.query));
   });
   r.add('POST', '/api/courses', (c) => { need(c, 'course:manage'); c.json(201, createCourse(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/courses/:id', (c) => { need(c, 'course:manage'); c.json(200, updateCourse(deps, c.user, c.params.id, c.body, c.ip)); });
+  r.add('DELETE', '/api/courses/:id', (c) => { need(c, 'course:manage'); deleteCourse(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/courses/:id/toggle', (c) => { need(c, 'course:manage'); toggleCourse(deps, c.user, c.params.id, !!c.body.enabled, c.ip); c.json(200, { ok: true }); });
   r.add('GET', '/api/me/grades', (c) => { need(c, 'grade:read_own'); c.json(200, myGrades(deps, c.user, c.query)); });
   r.add('GET', '/api/students/:id/grades', (c) => { need(c, 'student:read'); getStudent(deps, c.params.id); c.json(200, gradesFor(db, Number(c.params.id), null)); });
   r.add('POST', '/api/students/:id/grades', (c) => { need(c, 'grade:manage'); c.json(200, enterGrade(deps, c.user, c.params.id, c.body, c.ip)); });
+  r.add('DELETE', '/api/students/:id/grades/:gid', (c) => { need(c, 'grade:manage'); c.json(200, deleteGrade(deps, c.user, c.params.id, c.params.gid, c.ip)); });
   r.add('GET', '/api/news', (c) => c.json(200, { news: listNews(deps) }));
   r.add('POST', '/api/news', (c) => { need(c, 'news:manage'); c.json(201, createNews(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/news/:id', (c) => { need(c, 'news:manage'); c.json(200, updateNews(deps, c.user, c.params.id, c.body, c.ip)); });
   r.add('DELETE', '/api/news/:id', (c) => { need(c, 'news:manage'); deleteNews(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
   // وسائط الأخبار: رفع مباشر (جسم خام، النوع من البايتات)، رابط، حذف، وبثّ الملف مع Range
   r.add('POST', '/api/news/:id/media', (c) => { need(c, 'news:manage'); c.json(201, addUpload(deps, c.user, c.params.id, c.body, c.query.caption, c.ip)); }, { raw: true, maxBody: 51 * 1024 * 1024 });
@@ -59,6 +64,7 @@ export function buildRouter(deps) {
     if (!c.user.can('complaint:create') && !c.user.can('complaint:manage')) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden');
     c.json(200, listComplaints(deps, c.user, c.query));
   });
+  r.add('DELETE', '/api/complaints/:id', (c) => { need(c, 'complaint:manage'); deleteComplaint(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/complaints/:id/respond', (c) => { need(c, 'complaint:manage'); c.json(200, respondComplaint(deps, c.user, c.params.id, c.body, c.ip)); });
 
   // ---- تسجيل الطلاب (شؤون الطلاب) ----
@@ -72,14 +78,19 @@ export function buildRouter(deps) {
     c.json(200, { student: s, certificate: certSummary(certFor(db, s.id)) });
   });
   r.add('PUT', '/api/students/:id', (c) => { need(c, 'student:update'); c.json(200, { student: updateStudent(deps, c.user, c.params.id, c.body, c.ip) }); });
+  r.add('DELETE', '/api/students/:id', (c) => { need(c, 'student:delete'); deleteStudent(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/students/:id/reset-password', async (c) => { need(c, 'student:reset_password'); c.json(200, await resetStudentPassword(deps, c.user, c.params.id, c.ip)); });
   r.add('GET', '/api/programs', (c) => { need(c, 'student:read'); c.json(200, { programs: listPrograms(db) }); });
   // استيراد من Excel/CSV/SQL: commit=false فحص بلا كتابة، commit=true اعتماد
   r.add('POST', '/api/import/:kind', async (c) => { const k = c.params.kind; need(c, IMPORT_PERM[k] ?? 'role:manage'); c.json(200, await runImport(deps, c.user, k, c.body, c.ip)); }, { maxBody: 15 * 1024 * 1024 });
   r.add('GET', '/api/faculties', (c) => { need(c, 'student:read'); c.json(200, { faculties: listFaculties(db) }); });
   r.add('POST', '/api/admin/faculties', (c) => { need(c, 'program:manage'); c.json(201, addFaculty(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/admin/faculties/:id', (c) => { need(c, 'program:manage'); updateFaculty(deps, c.user, c.params.id, c.body, c.ip); c.json(200, { ok: true }); });
+  r.add('DELETE', '/api/admin/faculties/:id', (c) => { need(c, 'program:manage'); deleteFaculty(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/admin/faculties/:id/toggle', (c) => { need(c, 'program:manage'); toggleFaculty(deps, c.user, c.params.id, !!c.body.enabled, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/admin/programs', (c) => { need(c, 'program:manage'); c.json(201, addProgram(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/admin/programs/:id', (c) => { need(c, 'program:manage'); updateProgram(deps, c.user, c.params.id, c.body, c.ip); c.json(200, { ok: true }); });
+  r.add('DELETE', '/api/admin/programs/:id', (c) => { need(c, 'program:manage'); deleteProgram(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/admin/programs/:id/toggle', (c) => { need(c, 'program:manage'); toggleProgram(deps, c.user, c.params.id, !!c.body.enabled, c.ip); c.json(200, { ok: true }); });
 
   // ---- الخدمات والطلبات ----
@@ -110,8 +121,7 @@ export function buildRouter(deps) {
   const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   r.add('GET', '/api/analytics/export.xlsx', (c) => {
     need(c, 'stats:read');
-    const powerbi = c.query.kind === 'powerbi';
-    sendRaw(c.res, 200, { 'Content-Type': XLSX_MIME, 'Content-Disposition': `attachment; filename="${powerbi ? 'powerbi-dataset' : 'statistics-report'}.xlsx"` }, powerbi ? buildDatasetXlsx(db) : buildReportXlsx(db, c.query));
+    sendRaw(c.res, 200, { 'Content-Type': XLSX_MIME, 'Content-Disposition': 'attachment; filename="statistics-report.xlsx"' }, buildReportXlsx(db, c.query));
   });
   r.add('POST', '/api/analytics/export.docx', (c) => {
     need(c, 'stats:read');
@@ -163,6 +173,7 @@ export function buildRouter(deps) {
   r.add('GET', '/api/admin/users', (c) => { need(c, 'user:manage'); c.json(200, { users: listStaff(db) }); });
   r.add('POST', '/api/admin/users', async (c) => { need(c, 'user:manage'); c.json(201, await createUser(deps, c.user, c.body, c.ip)); });
   r.add('PUT', '/api/admin/users/:id', (c) => { need(c, 'user:manage'); c.json(200, updateUser(deps, c.user, c.params.id, c.body, c.ip)); });
+  r.add('DELETE', '/api/admin/users/:id', (c) => { need(c, 'user:manage'); c.json(200, deleteUser(deps, c.user, c.params.id, c.ip)); });
   r.add('POST', '/api/admin/users/:id/active', (c) => { need(c, 'user:manage'); c.json(200, setUserActive(deps, c.user, c.params.id, !!c.body.active, c.ip)); });
   r.add('POST', '/api/admin/users/:id/reset-password', async (c) => { need(c, 'user:manage'); c.json(200, await resetUserPassword(deps, c.user, c.params.id, c.ip)); });
 
@@ -176,6 +187,7 @@ export function buildRouter(deps) {
   r.add('DELETE', '/api/admin/roles/:key', (c) => { need(c, 'role:manage'); c.json(200, deleteRole(deps, c.user, c.params.key, c.ip)); });
   r.add('POST', '/api/admin/units', (c) => { need(c, 'role:manage'); c.json(201, createUnit(deps, c.user, c.body, c.ip)); });
   r.add('PUT', '/api/admin/units/:id', (c) => { need(c, 'role:manage'); c.json(200, updateUnit(deps, c.user, c.params.id, c.body, c.ip)); });
+  r.add('DELETE', '/api/admin/units/:id', (c) => { need(c, 'role:manage'); c.json(200, deleteUnit(deps, c.user, c.params.id, c.ip)); });
   r.add('POST', '/api/admin/links', (c) => { need(c, 'role:manage'); c.json(201, createLink(deps, c.user, c.body, c.ip)); });
   r.add('DELETE', '/api/admin/links/:id', (c) => { need(c, 'role:manage'); c.json(200, deleteLink(deps, c.user, c.params.id, c.ip)); });
   r.add('GET', '/api/admin/holds', (c) => {
@@ -193,6 +205,8 @@ export function buildRouter(deps) {
     audit(db, c.user, `تسجيل ذمة (${c.body.holdType})`, c.body.studentNo, c.ip);
     c.json(201, { id: Number(res.lastInsertRowid) });
   });
+  r.add('PUT', '/api/admin/holds/:id', (c) => { need(c, 'holds:manage'); updateHold(deps, c.user, c.params.id, c.body, c.ip); c.json(200, { ok: true }); });
+  r.add('DELETE', '/api/admin/holds/:id', (c) => { need(c, 'holds:manage'); deleteHold(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
   r.add('POST', '/api/admin/holds/:id/clear', (c) => {
     need(c, 'holds:manage');
     const res = db.prepare('UPDATE student_holds SET active = 0, cleared_at = ? WHERE id = ? AND active = 1').run(Date.now(), Number(c.params.id));
@@ -211,5 +225,8 @@ export function buildRouter(deps) {
     audit(db, c.user, `${c.body.enabled ? 'تفعيل' : 'تعطيل'} قاعدة`, c.params.id, c.ip);
     c.json(200, { ok: true });
   });
+  r.add('PUT', '/api/admin/rules/:id', (c) => { need(c, 'rules:manage'); updateRule(deps, c.user, c.params.id, c.body, c.ip); c.json(200, { ok: true }); });
+  r.add('DELETE', '/api/admin/rules/:id', (c) => { need(c, 'rules:manage'); deleteRule(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
+
   return r;
 }

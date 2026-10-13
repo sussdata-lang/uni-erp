@@ -122,6 +122,19 @@ export function updateUnit({ db }, actor, id, input, ip) {
   return { ok: true };
 }
 
+export function deleteUnit({ db }, actor, id, ip) {
+  const u = unitRow(db, id);
+  if (db.prepare('SELECT 1 FROM users WHERE unit_id = ?').get(u.id)) throw new HttpError(409, 'لا يمكن حذف وحدة فيها حسابات؛ انقل الحسابات أولاً.', 'conflict');
+  if (db.prepare('SELECT 1 FROM org_units WHERE parent_id = ?').get(u.id)) throw new HttpError(409, 'لا يمكن حذف وحدة لها وحدات فرعية.', 'conflict');
+  if (db.prepare('SELECT 1 FROM requests WHERE assigned_unit_id = ?').get(u.id)) throw new HttpError(409, 'لا يمكن حذف وحدة أُحيلت إليها طلبات؛ عطّلها بدلاً من حذفها.', 'conflict');
+  tx(db, () => {
+    db.prepare('DELETE FROM unit_links WHERE from_unit = ? OR to_unit = ?').run(u.id, u.id);
+    db.prepare('DELETE FROM org_units WHERE id = ?').run(u.id);
+    audit(db, actor, `حذف وحدة إدارية: ${u.name}`, String(u.id), ip);
+  });
+  return { ok: true };
+}
+
 export function createLink({ db }, actor, input, ip) {
   const a = unitRow(db, input?.from), b = unitRow(db, input?.to);
   if (a.id === b.id) throw bad('لا يمكن ربط الوحدة بنفسها.');

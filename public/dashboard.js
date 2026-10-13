@@ -1,4 +1,4 @@
-/* لوحة الإحصاءات: مؤشرات ومخططات SVG تفاعلية على نمط Power BI، تحديث دوري، مرشحات (تحديد متقاطع)، وتصدير PDF / Word / Excel / Power BI */
+/* لوحة الإحصاءات: مؤشرات ومخططات SVG تفاعلية بنمط لوحات المعلومات، تحديث دوري، مرشحات (تحديد متقاطع)، وتصدير PDF / Word / Excel */
 (function () {
   const UA = window.UA, { S, api, esc, toast } = UA;
   const PAL = ['#054239', '#C9A24B', '#0A8F7A', '#7A5C12', '#4DB6A0', '#2F6F9F', '#8C9A94', '#B3261E'];
@@ -111,7 +111,7 @@
       <div class="dash-bar no-print"><div class="slicers"><label>الكلية / المعهد<select id="d-fac" data-chg="dfilter"><option value="">الكل</option>${fo}</select></label><label>سنة القيد<select id="d-year" data-chg="dfilter"><option value="">الكل</option>${yo}</select></label>
           ${D.faculty || D.year ? '<button class="btn sm" data-act="dclear">مسح المرشحات</button>' : ''}</div>
         <div class="dash-live"><span class="live-dot${D.paused ? ' off' : ''}"></span><span>${D.paused ? 'التحديث متوقف' : 'تحديث تلقائي كل دقيقة'} · آخر تحديث ${upd}</span><button class="btn sm" data-act="dpause">${D.paused ? 'استئناف' : 'إيقاف'}</button><button class="btn sm" data-act="drefresh">تحديث الآن</button></div></div>
-      <div class="dash-bar no-print"><div class="exports"><b>تصدير:</b>${exp('pdf', 'PDF')}${exp('docx', 'Word')}${exp('xlsx', 'Excel')}${exp('powerbi', 'Power BI')}</div><span class="small">Power BI: نموذج بيانات (Excel) يُستورد من Get data ← Excel. PDF: يُفتح نافذة الطباعة فاختر «حفظ كـ PDF».</span></div>
+      <div class="dash-bar no-print"><div class="exports"><b>تصدير:</b>${exp('pdf', 'PDF')}${exp('docx', 'Word')}${exp('xlsx', 'Excel')}</div><span class="small">PDF: تُفتح نافذة الطباعة فاختر «حفظ كـ PDF».</span></div>
       <div class="print-head"><b>تقرير الإحصاءات — الجامعة السورية للعلوم الأمنية</b><span>${esc(D.faculty ? (a.options.faculties.find((f) => String(f.id) === String(D.faculty)) || {}).name || '' : 'كل الجهات')}${D.year ? ' · سنة القيد ' + esc(D.year) : ''} · ${new Date(a.generatedAt).toLocaleString('ar-SY')}</span></div>
       <div class="kpis">${a.kpis.map(kpiTile).join('')}</div>
       <div class="vis-grid">${a.tables.map((t) => `<section class="vis ${SPAN[t.id] || ''}" data-vis="${t.id}"><header><h3>${esc(t.title)}</h3>${t.selectable ? '<span class="small no-print">انقر عموداً لتصفية اللوحة</span>' : ''}</header><div class="vis-body">${chart(t)}</div></section>`).join('')}</div></div>`;
@@ -165,7 +165,6 @@
         const q = qs();
         if (d.k === 'pdf') { D.exporting = ''; UA.render(); setTimeout(() => window.print(), 80); return; }
         if (d.k === 'xlsx') await download('/api/analytics/export.xlsx?' + q, {}, 'statistics-report.xlsx');
-        else if (d.k === 'powerbi') await download('/api/analytics/export.xlsx?kind=powerbi', {}, 'powerbi-dataset.xlsx');
         else if (d.k === 'docx') {
           const charts = []; for (const v of document.querySelectorAll('.vis[data-vis]')) { const svg = v.querySelector('svg'); if (svg) { try { charts.push({ id: v.dataset.vis, jpeg: await chartJpeg(svg) }); } catch { /* مخطط تعذّر تحويله: يبقى جدوله */ } } }
           await download('/api/analytics/export.docx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ faculty: D.faculty || null, year: D.year || null, charts }) }, 'statistics-report.docx');

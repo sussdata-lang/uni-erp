@@ -3,6 +3,9 @@ import { enqueueCertificate } from './enrollcert.js';
 import { audit } from '../audit.js';
 import { hashPassword, tempPassword } from '../security.js';
 import { HttpError } from '../http.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { certDir } from './enrollcert.js';
 
 /* ------------------------------------------------------------------
    تسجيل الطلاب: تعريف الحقول مصدر واحد للتحقق في الخادم ولرسم النموذج في الواجهة.
@@ -214,7 +217,7 @@ export function duplicateCheck(db, p, selfId = 0) {
   if (same) throw new HttpError(409, `يوجد طالب بنفس الاسم واسم الأم وتاريخ الميلاد (الرقم الجامعي ${same.student_no})؛ تحقق من عدم تكرار التسجيل.`, 'duplicate', 'first_name');
 }
 
-function composeUser(db, p) {
+export function composeUser(db, p) {
   const g = db.prepare('SELECT faculty, name, degree FROM programs WHERE id = ?').get(p.program_id);
   return { display: shortName(p), program: `${g.faculty === g.name ? g.name : `${g.degree} ${g.name}`} - ${levelLabel(p.study_level)}` };
 }
@@ -393,4 +396,98 @@ export function updateOwnContact({ db }, user, input, ip) {
     audit(db, user, 'تعديل بيانات الاتصال (من الطالب)', user.student_no ?? String(user.id), ip);
   }
   return myProfile({ db }, user);
+}
+
+/* ---------------- تعديل الكليات والبرامج وحذفها ---------------- */
+// أسماء الطلاب المركّبة (users.program) نسخة من بيانات البرنامج: تُجدَّد عند تعديل البرنامج أو الجهة
+function refreshStudentLabels(db, programIds) {
+  for (const pid of programIds) {
+    const rows = db.prepare('SELECT user_id, study_level FROM student_profiles WHERE program_id = ?').all(pid);
+    for (const r of rows) db.prepare('UPDATE users SET program = ? WHERE id = ?').run(composeUser(db, { program_id: pid, study_level: r.study_level }).program, r.user_id);
+  }
+}
+
+export function updateFaculty({ db }, actor, id, b, ip) {
+  const f = db.prepare('SELECT * FROM faculties WHERE id = ?').get(Number(id));
+  if (!f) throw new HttpError(404, 'الجهة غير موجودة.', 'not_found');
+  const name = String(b?.name ?? f.name).replace(/\s+/g, ' ').trim(), nameEn = String(b?.nameEn ?? f.name_en).replace(/\s+/g, ' ').trim();
+  if (name.length < 3 || name.length > 80 || CTRL.test(name)) throw new HttpError(400, 'اسم الجهة بالعربية: 3 إلى 80 حرفاً.', 'validation');
+  if (!/^[A-Za-z][A-Za-z '&-]{2,99}$/.test(nameEn)) throw new HttpError(400, 'الاسم بالإنكليزية بأحرف لاتينية (3 إلى 100 حرف).', 'validation');
+  const kind = b?.kind ?? f.kind;
+  if (!KIND_LABEL[kind]) throw new HttpError(400, 'نوع الجهة غير صالح.', 'validation');
+  const code = String(b?.code ?? f.code).trim().toUpperCase();
+  if (!/^[A-Z]{2,8}$/.test(code)) throw new HttpError(400, 'رمز الجهة: من 2 إلى 8 أحرف لاتينية كبيرة.', 'validation');
+  if (db.prepare('SELECT 1 FROM faculties WHERE name = ? AND id != ?').get(name, f.id)) throw new HttpError(409, 'يوجد جهة بهذا الاسم.', 'conflict');
+  if (db.prepare('SELECT 1 FROM faculties WHERE code = ? AND id != ?').get(code, f.id)) throw new HttpError(409, `الرمز ${code} مستخدم لجهة أخرى.`, 'conflict');
+  const students = db.prepare('SELECT COUNT(*) c FROM student_profiles sp JOIN programs g ON g.id = sp.program_id WHERE g.faculty_id = ?').get(f.id).c;
+  if (code !== f.code && students) throw new HttpError(409, 'لا يمكن تغيير رمز جهة فيها طلاب لأن أرقامهم الجامعية صدرت به.', 'conflict');
+  tx(db, () => {
+    db.prepare('UPDATE faculties SET name = ?, name_en = ?, code = ?, kind = ? WHERE id = ?').run(name, nameEn, code, kind, f.id);
+    if (name !== f.name) {
+      db.prepare('UPDATE programs SET name = ? WHERE faculty_id = ? AND name = ?').run(name, f.id, f.name);   // البرنامج الأساسي يحمل اسم الجهة
+      db.prepare('UPDATE programs SET faculty = ? WHERE faculty_id = ?').run(name, f.id);
+      refreshStudentLabels(db, db.prepare('SELECT id FROM programs WHERE faculty_id = ?').all(f.id).map((p) => p.id));
+    }
+    audit(db, actor, `تعديل ${KIND_LABEL[kind]}: ${name}`, String(f.id), ip);
+  });
+}
+
+export function deleteFaculty({ db }, actor, id, ip) {
+  const f = db.prepare('SELECT * FROM faculties WHERE id = ?').get(Number(id));
+  if (!f) throw new HttpError(404, 'الجهة غير موجودة.', 'not_found');
+  const progs = db.prepare('SELECT id FROM programs WHERE faculty_id = ?').all(f.id).map((p) => p.id);
+  const students = progs.length ? db.prepare(`SELECT COUNT(*) c FROM student_profiles WHERE program_id IN (${progs.map(() => '?').join(',')})`).get(...progs).c : 0;
+  if (students) throw new HttpError(409, `لا يمكن حذف جهة فيها ${students} طالباً؛ انقلهم إلى برنامج آخر أو عطّل الجهة.`, 'conflict');
+  const courses = progs.length ? db.prepare(`SELECT COUNT(*) c FROM courses WHERE program_id IN (${progs.map(() => '?').join(',')})`).get(...progs).c : 0;
+  if (courses) throw new HttpError(409, `لا يمكن حذف جهة لها ${courses} مقرراً في دليل المواد؛ احذف المقررات أولاً أو عطّل الجهة.`, 'conflict');
+  tx(db, () => {
+    db.prepare('DELETE FROM programs WHERE faculty_id = ?').run(f.id);
+    db.prepare('DELETE FROM faculties WHERE id = ?').run(f.id);
+    audit(db, actor, `حذف ${KIND_LABEL[f.kind]}: ${f.name}`, String(f.id), ip);
+  });
+}
+
+export function updateProgram({ db }, actor, id, b, ip) {
+  const p = db.prepare('SELECT * FROM programs WHERE id = ?').get(Number(id));
+  if (!p) throw new HttpError(404, 'البرنامج غير موجود.', 'not_found');
+  const t = (v, n) => { const s = String(v ?? '').replace(/\s+/g, ' ').trim(); if (!s || s.length > n || CTRL.test(s)) throw new HttpError(400, 'بيانات البرنامج غير صالحة.', 'validation'); return s; };
+  const name = t(b?.name ?? p.name, 80), degree = t(b?.degree ?? p.degree, 30), years = Number(b?.years ?? p.years);
+  if (!Number.isInteger(years) || years < 1 || years > 7) throw new HttpError(400, 'مدة البرنامج بين 1 و7 سنوات.', 'validation');
+  const maxLevel = db.prepare('SELECT MAX(study_level) m FROM student_profiles WHERE program_id = ?').get(p.id).m ?? 0;
+  const maxCourse = db.prepare('SELECT MAX(level) m FROM courses WHERE program_id = ?').get(p.id).m ?? 0;
+  if (years < Math.max(maxLevel, maxCourse)) throw new HttpError(409, `لا يمكن تقليل المدة إلى ${years}: يوجد طلاب أو مقررات في السنة ${Math.max(maxLevel, maxCourse)}.`, 'conflict');
+  if (db.prepare('SELECT 1 FROM programs WHERE faculty = ? AND name = ? AND degree = ? AND id != ?').get(p.faculty, name, degree, p.id)) throw new HttpError(409, 'البرنامج موجود مسبقاً.', 'conflict');
+  tx(db, () => {
+    db.prepare('UPDATE programs SET name = ?, degree = ?, years = ? WHERE id = ?').run(name, degree, years, p.id);
+    refreshStudentLabels(db, [p.id]);
+    audit(db, actor, 'تعديل برنامج أكاديمي', `${p.faculty} / ${name}`.slice(0, 100), ip);
+  });
+}
+
+export function deleteProgram({ db }, actor, id, ip) {
+  const p = db.prepare('SELECT * FROM programs WHERE id = ?').get(Number(id));
+  if (!p) throw new HttpError(404, 'البرنامج غير موجود.', 'not_found');
+  const students = db.prepare('SELECT COUNT(*) c FROM student_profiles WHERE program_id = ?').get(p.id).c;
+  if (students) throw new HttpError(409, `لا يمكن حذف برنامج فيه ${students} طالباً؛ عطّله أو انقل الطلاب أولاً.`, 'conflict');
+  const courses = db.prepare('SELECT COUNT(*) c FROM courses WHERE program_id = ?').get(p.id).c;
+  if (courses) throw new HttpError(409, `لا يمكن حذف برنامج له ${courses} مقرراً؛ احذف المقررات أولاً أو عطّله.`, 'conflict');
+  tx(db, () => { db.prepare('DELETE FROM programs WHERE id = ?').run(p.id); audit(db, actor, 'حذف برنامج أكاديمي', `${p.faculty} / ${p.name}`.slice(0, 100), ip); });
+}
+
+/* ---------------- حذف طالب ---------------- */
+// الطلبات والوثائق الموقَّعة وسجل أحداث الطلب غير قابلة للحذف بتصميم النظام (مشغّلات SQLite تمنع ذلك)،
+// فالطالب الذي قدّم طلبات يُغيَّر وضع قيده (منسحب/موقوف...) ولا يُحذف.
+export function deleteStudent({ db, cfg }, actor, id, ip) {
+  const u = db.prepare("SELECT id, student_no FROM users WHERE id = ? AND role = 'student'").get(Number(id));
+  if (!u) throw new HttpError(404, 'الطالب غير موجود.', 'not_found');
+  const reqs = db.prepare('SELECT COUNT(*) c FROM requests WHERE student_id = ?').get(u.id).c;
+  if (reqs) throw new HttpError(409, `لا يمكن حذف طالب لديه ${reqs} طلباً؛ الطلبات والوثائق الموقَّعة سجلات دائمة. غيّر حالة قيده إلى «منسحب» أو «موقوف».`, 'conflict');
+  const cert = db.prepare('SELECT file FROM student_certs WHERE student_id = ?').get(u.id);
+  tx(db, () => {
+    for (const t of ['grades', 'student_holds', 'complaints', 'sessions', 'student_certs']) db.prepare(`DELETE FROM ${t} WHERE ${t === 'sessions' ? 'user_id' : 'student_id'} = ?`).run(u.id);
+    db.prepare('DELETE FROM student_profiles WHERE user_id = ?').run(u.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+    audit(db, actor, 'حذف طالب وكل بياناته', u.student_no, ip);
+  });
+  if (cert) { try { fs.unlinkSync(path.join(certDir(cfg), cert.file)); } catch { /* الملف غير موجود */ } }
 }

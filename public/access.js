@@ -44,7 +44,7 @@
       const self = S.me && u.id === S.me.id;
       return `<tr><td class="mono">${esc(u.username)}</td><td>${esc(u.name)}</td><td>${esc(u.roleLabel)}</td><td>${u.unit ? esc(u.unit.name) : '<span class="hint">—</span>'}</td>
         <td>${u.active ? '<span class="ok-t">فعّال</span>' : '<span class="bad-t">معطّل</span>'}${u.locked ? ' <span class="small">(مقفل)</span>' : ''}${u.mustChange ? ' <span class="small">(بانتظار تغيير كلمة المرور)</span>' : ''}</td>
-        <td style="white-space:nowrap"><button class="btn sm" data-act="xuedit" data-id="${u.id}">تعديل</button> <button class="btn sm" data-act="xupw" data-id="${u.id}">كلمة مرور جديدة</button>${self ? '' : ` <button class="btn sm" data-act="xuactive" data-id="${u.id}" data-on="${u.active ? 0 : 1}">${u.active ? 'تعطيل' : 'تفعيل'}</button>`}</td></tr>`;
+        <td style="white-space:nowrap"><button class="btn sm" data-act="xuedit" data-id="${u.id}">تعديل</button> <button class="btn sm" data-act="xupw" data-id="${u.id}">كلمة مرور جديدة</button>${self ? '' : ` <button class="btn sm" data-act="xuactive" data-id="${u.id}" data-on="${u.active ? 0 : 1}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn sm bad" data-act="xudel" data-id="${u.id}">حذف</button>`}</td></tr>`;
     }).join('');
     return `${c}<section class="card"><h2>حساب إداري جديد</h2>
       <form class="inline-form" id="xuser"><label>اسم المستخدم<input id="xn-name" autocomplete="off" dir="ltr" class="mono" required></label><label>الاسم الكامل<input id="xn-disp" maxlength="100" required></label>
@@ -91,7 +91,7 @@
   function unitsTab() {
     const d = X.data, kids = (p) => d.units.filter((u) => (u.parentId ?? null) === p);
     const tree = (p, depth) => kids(p).map((u) => `<tr${u.active ? '' : ' style="opacity:.55"'}><td style="padding-inline-start:${12 + depth * 22}px">${depth ? '↳ ' : ''}<b>${esc(u.name)}</b> <span class="small">${KIND[u.kind] || ''}</span></td><td>${u.users}</td><td>${u.pending}</td>
-      <td style="white-space:nowrap"><button class="btn sm" data-act="xurename" data-id="${u.id}">إعادة تسمية</button> <button class="btn sm" data-act="xuntoggle" data-id="${u.id}" data-on="${u.active ? 0 : 1}">${u.active ? 'تعطيل' : 'تفعيل'}</button></td></tr>${tree(u.id, depth + 1)}`).join('');
+      <td style="white-space:nowrap"><button class="btn sm" data-act="xurename" data-id="${u.id}">إعادة تسمية</button> <button class="btn sm" data-act="xuntoggle" data-id="${u.id}" data-on="${u.active ? 0 : 1}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn sm bad" data-act="xundel" data-id="${u.id}">حذف</button></td></tr>${tree(u.id, depth + 1)}`).join('');
     const uOpt = (sel) => d.units.filter((u) => u.active).map((u) => `<option value="${u.id}"${u.id === sel ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
     const links = d.links.map((l) => `<li><span><b>${esc(unitName(l.from))}</b> ${l.twoWay ? '↔' : '←'} <b>${esc(unitName(l.to))}</b> <span class="small">${l.twoWay ? '(في الاتجاهين)' : `(الإحالة من ${esc(unitName(l.from))} إلى ${esc(unitName(l.to))} فقط)`}</span></span> <button class="btn sm bad" data-act="xldel" data-id="${l.id}">حذف</button></li>`).join('');
     return `<div class="stack"><section class="card"><h2>الوحدات الإدارية</h2><div class="tbl-wrap"><table><thead><tr><th>الوحدة</th><th>الحسابات</th><th>طلبات معلّقة</th><th></th></tr></thead><tbody>${tree(null, 0)}</tbody></table></div>
@@ -138,6 +138,8 @@
       X.cred = (await api('POST', `/api/admin/users/${d.id}/reset-password`, {})).credentials; await reload(); window.scrollTo(0, 0);
     }),
     xuactive: (el, d) => run(async () => { await api('POST', `/api/admin/users/${d.id}/active`, { active: d.on === '1' }); await reload(); }),
+    xudel: (el, d) => run(async () => { const u = X.data.users.find((x) => x.id === Number(d.id)); if (!confirm(`حذف الحساب «${u ? u.username : ''}» نهائياً؟ إن كان مرتبطاً بسجلات فسيُرفض الحذف ويمكنك تعطيله.`)) return; await api('DELETE', `/api/admin/users/${d.id}`); await reload(); toast('حُذف الحساب'); }),
+    xundel: (el, d) => run(async () => { const u = X.data.units.find((x) => x.id === Number(d.id)); if (!confirm(`حذف الوحدة «${u ? u.name : ''}» وروابطها نهائياً؟`)) return; await api('DELETE', `/api/admin/units/${d.id}`); await reload(); toast('حُذفت الوحدة'); }),
     xrnew: async () => { X.rsel = 'new'; UA.render(); },
     xrcancel: async () => { X.rsel = null; UA.render(); },
     xrsel: async (el, d) => { X.rsel = d.k; UA.render(); },

@@ -1,4 +1,4 @@
-// لوحة الإحصاءات: مؤشرات ومجموعات بيانات للمخططات (تُرسم في المتصفح) وللتصدير (Excel / Word / PDF / نموذج Power BI).
+// لوحة الإحصاءات: مؤشرات ومجموعات بيانات للمخططات (تُرسم في المتصفح) وللتصدير (Excel / Word / PDF).
 // مصدر واحد للأرقام: الواجهة والتصدير يستهلكان نفس الجداول، فلا تختلف الأرقام بين الشاشة والملف.
 import { PASS_MARK } from './academics.js';
 import { STATUS_LABEL, levelLabel } from './students.js';
@@ -96,32 +96,4 @@ export function analytics(db, { faculty, year } = {}, now = new Date()) {
     T('complaints', 'الشكاوى حسب الحالة', 'donut', ['الحالة', 'الشكاوى'], cmp),
   ];
   return { generatedAt: now.getTime(), filter: { faculty: f, year: y }, kpis, tables };
-}
-
-/* ---------- نموذج بيانات Power BI: جداول حقائق وأبعاد بلا بيانات تعريفية شخصية ---------- */
-const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '');
-export function powerBiDataset(db) {
-  const q = (sql) => db.prepare(sql).all();
-  const FAC = `LEFT JOIN faculties fa ON fa.id = g.faculty_id`;
-  return [
-    { name: 'Faculties', rows: [['FacultyId', 'Name', 'NameEn', 'Code', 'Kind', 'Active'], ...q('SELECT id, name, name_en, code, kind, active FROM faculties ORDER BY id').map((r) => [r.id, r.name, r.name_en, r.code, r.kind, r.active])] },
-    { name: 'Students', rows: [['StudentNo', 'FacultyId', 'Faculty', 'Program', 'EnrollYear', 'EnrollTerm', 'StudyLevel', 'Status', 'Gender', 'Governorate', 'AdmissionType', 'HighSchoolType', 'HighSchoolPct', 'RegisteredOn'],
-      ...q(`SELECT u.student_no, fa.id fid, COALESCE(fa.name, '') fname, g.name pname, sp.enroll_year, sp.enroll_term, sp.study_level, sp.status, sp.gender, sp.governorate, sp.admission_type, sp.hs_type, sp.hs_score, sp.hs_max, sp.created_at
-            FROM student_profiles sp JOIN users u ON u.id = sp.user_id JOIN programs g ON g.id = sp.program_id ${FAC} ORDER BY u.student_no`)
-        .map((r) => [r.student_no, r.fid ?? '', r.fname, r.pname, r.enroll_year, r.enroll_term, r.study_level, STATUS_LABEL[r.status] ?? r.status, r.gender, r.governorate, r.admission_type, r.hs_type, r.hs_max ? Math.round((r.hs_score / r.hs_max) * 1000) / 10 : '', day(r.created_at)])] },
-    { name: 'Requests', rows: [['RequestNo', 'StudentNo', 'FacultyId', 'Service', 'Status', 'CreatedOn', 'DecidedOn', 'HoursToDecide', 'CurrentUnit'],
-      ...q(`SELECT r.no, u.student_no, fa.id fid, st.label, r.status, r.created_at, r.decided_at, o.name unit FROM requests r JOIN users u ON u.id = r.student_id JOIN service_types st ON st.code = r.service_code
-            LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id ${FAC} LEFT JOIN org_units o ON o.id = r.assigned_unit_id ORDER BY r.id`)
-        .map((r) => [r.no, r.student_no ?? '', r.fid ?? '', r.label, { review: 'قيد المراجعة', approved: 'معتمد', rejected: 'مرفوض' }[r.status], day(r.created_at), day(r.decided_at), r.decided_at ? Math.round(((r.decided_at - r.created_at) / 3600000) * 10) / 10 : '', r.unit ?? ''])] },
-    { name: 'Courses', rows: [['CourseId', 'FacultyId', 'Program', 'Level', 'Semester', 'Name', 'Code', 'Hours', 'Instructor', 'Active'],
-      ...q(`SELECT c.id, fa.id fid, g.name pname, c.level, c.semester, c.name, c.code, c.hours, c.instructor, c.active FROM courses c JOIN programs g ON g.id = c.program_id ${FAC} ORDER BY c.id`)
-        .map((r) => [r.id, r.fid ?? '', r.pname, r.level, r.semester, r.name, r.code ?? '', r.hours, r.instructor ?? '', r.active])] },
-    { name: 'Grades', rows: [['StudentNo', 'FacultyId', 'CourseId', 'Course', 'Level', 'Semester', 'AcademicYear', 'Theory', 'Practical', 'Mark', 'Passed'],
-      ...q(`SELECT u.student_no, fa.id fid, gr.course_id, gr.course, gr.level, gr.semester, gr.academic_year, gr.theory_mark, gr.practical_mark, gr.mark FROM grades gr JOIN users u ON u.id = gr.student_id
-            LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id ${FAC} ORDER BY gr.id`)
-        .map((r) => [r.student_no ?? '', r.fid ?? '', r.course_id ?? '', r.course, r.level ?? '', r.semester ?? '', r.academic_year ?? '', r.theory_mark ?? '', r.practical_mark ?? '', r.mark, r.mark >= PASS_MARK ? 1 : 0])] },
-    { name: 'Complaints', rows: [['ComplaintNo', 'StudentNo', 'FacultyId', 'Status', 'CreatedOn', 'RespondedOn'],
-      ...q(`SELECT cm.no, u.student_no, fa.id fid, cm.status, cm.created_at, cm.responded_at FROM complaints cm JOIN users u ON u.id = cm.student_id
-            LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id ${FAC} ORDER BY cm.id`).map((r) => [r.no, r.student_no ?? '', r.fid ?? '', r.status, day(r.created_at), day(r.responded_at)])] },
-  ];
 }

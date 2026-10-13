@@ -156,3 +156,51 @@ export function respondComplaint({ db }, actor, id, b, ip) {
   audit(db, actor, status === 'closed' ? 'الرد على شكوى وإغلاقها' : 'الرد على شكوى', c.no, ip);
   return { complaint: cview(db.prepare(`${CSEL} WHERE c.id = ?`).get(c.id), true) };
 }
+
+/* ---------------- تعديل المواد وحذفها ---------------- */
+export function updateCourse({ db }, actor, id, b, ip) {
+  const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(id));
+  if (!c) throw new HttpError(404, 'المقرر غير موجود.', 'not_found');
+  const prog = db.prepare('SELECT years FROM programs WHERE id = ?').get(c.program_id);
+  const level = intIn(b?.level ?? c.level, 1, prog.years, 'السنة الدراسية'), semester = intIn(b?.semester ?? c.semester, 1, 2, 'الفصل');
+  const name = text(b?.name ?? c.name, 2, 100, 'اسم المقرر'), hours = intIn(b?.hours ?? c.hours, 0, 12, 'الساعات');
+  const code = b?.code ? text(b.code, 1, 20, 'رمز المقرر') : null, instructor = b?.instructor ? text(b.instructor, 2, 80, 'المدرّس') : null;
+  if (db.prepare('SELECT 1 FROM courses WHERE program_id = ? AND level = ? AND semester = ? AND name = ? AND id != ?').get(c.program_id, level, semester, name, c.id)) throw new HttpError(409, 'يوجد مقرر بالاسم نفسه في هذه السنة والفصل.', 'conflict');
+  tx(db, () => {
+    db.prepare('UPDATE courses SET level = ?, semester = ?, name = ?, hours = ?, code = ?, instructor = ? WHERE id = ?').run(level, semester, name, hours, code, instructor, c.id);
+    // العلامات تحمل نسخة من بيانات المقرر وقت الإدخال: تُزامَن كي لا تتناقض مع الدليل
+    db.prepare('UPDATE grades SET course = ?, hours = ?, level = ?, semester = ? WHERE course_id = ?').run(name, hours, level, semester, c.id);
+    audit(db, actor, 'تعديل مقرر', name.slice(0, 100), ip);
+  });
+  return { course: courseView(db.prepare('SELECT * FROM courses WHERE id = ?').get(c.id)) };
+}
+
+export function deleteCourse({ db }, actor, id, ip) {
+  const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(id));
+  if (!c) throw new HttpError(404, 'المقرر غير موجود.', 'not_found');
+  const n = db.prepare('SELECT COUNT(*) n FROM grades WHERE course_id = ?').get(c.id).n;
+  if (n) throw new HttpError(409, `لا يمكن حذف مقرر له ${n} علامة مسجَّلة؛ احذف علاماته أولاً أو عطّله بدلاً من حذفه.`, 'conflict');
+  tx(db, () => { db.prepare('DELETE FROM courses WHERE id = ?').run(c.id); audit(db, actor, 'حذف مقرر', c.name.slice(0, 100), ip); });
+}
+
+export function deleteGrade({ db }, actor, studentId, gradeId, ip) {
+  const g = db.prepare('SELECT g.id, g.course, u.student_no FROM grades g JOIN users u ON u.id = g.student_id WHERE g.id = ? AND g.student_id = ?').get(Number(gradeId), Number(studentId));
+  if (!g) throw new HttpError(404, 'العلامة غير موجودة.', 'not_found');
+  tx(db, () => { db.prepare('DELETE FROM grades WHERE id = ?').run(g.id); audit(db, actor, 'حذف علامة', `${g.student_no} / ${g.course}`.slice(0, 100), ip); });
+  return gradesFor(db, Number(studentId), null);
+}
+
+/* ---------------- تعديل الأخبار والشكاوى وحذفها ---------------- */
+export function updateNews({ db }, actor, id, b, ip) {
+  const n = db.prepare('SELECT * FROM news WHERE id = ?').get(Number(id));
+  if (!n) throw new HttpError(404, 'الخبر غير موجود.', 'not_found');
+  const title = text(b?.title ?? n.title, 3, 150, 'العنوان'), body = text(b?.body ?? n.body, 3, 4000, 'النص'), pinned = b?.pinned === undefined ? n.pinned : (b.pinned ? 1 : 0);
+  tx(db, () => { db.prepare('UPDATE news SET title = ?, body = ?, pinned = ? WHERE id = ?').run(title, body, pinned, n.id); audit(db, actor, 'تعديل خبر', title.slice(0, 100), ip); });
+  return { ok: true };
+}
+
+export function deleteComplaint({ db }, actor, id, ip) {
+  const c = db.prepare('SELECT id, no FROM complaints WHERE id = ?').get(Number(id));
+  if (!c) throw new HttpError(404, 'الشكوى غير موجودة.', 'not_found');
+  tx(db, () => { db.prepare('DELETE FROM complaints WHERE id = ?').run(c.id); audit(db, actor, 'حذف شكوى', c.no, ip); });
+}

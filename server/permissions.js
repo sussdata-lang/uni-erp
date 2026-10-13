@@ -16,6 +16,7 @@ export const PERMISSION_CATALOG = [
     ['student:read',           'عرض ملفات الطلاب'],
     ['student:update',         'تعديل ملفات الطلاب'],
     ['student:reset_password', 'إعادة تعيين كلمة مرور طالب'],
+    ['student:delete',         'حذف طالب وبياناته'],
     ['holds:manage',           'إدارة الذمم والموانع'],
     ['program:manage',         'إدارة الكليات والبرامج'],
   ] },

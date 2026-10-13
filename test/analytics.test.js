@@ -72,17 +72,13 @@ test('المرشحات: كلية وسنة تعيد حساب كل شيء، وجد
   assert.equal((await api('GET', '/api/analytics?faculty=abc&year=;DROP', { cookie: staff })).status, 200);
 });
 
-test('التصدير: تقرير Excel ونموذج Power BI سليمان، والأخير بلا بيانات تعريفية', async () => {
+test('التصدير: تقرير Excel سليم، ولا يوجد خيار Power BI', async () => {
   const rep = await api('GET', '/api/analytics/export.xlsx', { cookie: auditor });
   assert.equal(rep.status, 200); assert.match(rep.headers.get('content-type'), /spreadsheetml/); assert.match(rep.headers.get('content-disposition'), /statistics-report\.xlsx/);
   const wb = readXlsx(rep.buf); assert.equal(wb.sheets[0].name, 'ملخص'); assert.ok(wb.sheets.length >= 16);
   assert.ok(wb.sheets[0].rows.some((r) => r[0] === 'الطلاب المقيَّدون' && r[1] === '2'));
-  const pbi = await api('GET', '/api/analytics/export.xlsx?kind=powerbi', { cookie: staff }), ds = readXlsx(pbi.buf);
-  assert.deepEqual(ds.sheets.map((s) => s.name), ['README', 'Faculties', 'Students', 'Requests', 'Courses', 'Grades', 'Complaints']);
-  const stuSheet = ds.sheets.find((s) => s.name === 'Students').rows;
-  assert.equal(stuSheet.length, 3); assert.ok(!stuSheet[0].some((h) => /name|national|phone|address/i.test(h)));   // لا أسماء ولا هواتف
-  assert.ok(stuSheet.slice(1).every((r) => /^[A-Z]+-2026-000\d$/.test(r[0])));
-  assert.equal(ds.sheets.find((s) => s.name === 'Grades').rows.length, 3);
+  const old = await api('GET', '/api/analytics/export.xlsx?kind=powerbi', { cookie: staff });   // الخيار محذوف: يُعاد تقرير الإحصاءات العادي
+  assert.match(old.headers.get('content-disposition'), /statistics-report\.xlsx/);
   assert.equal((await api('GET', '/api/analytics/export.xlsx', { cookie: stu })).status, 403);
 });
 

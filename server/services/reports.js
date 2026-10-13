@@ -2,7 +2,7 @@
 import { writeXlsx } from '../lib/xlsx.js';
 import { writeDocx } from '../lib/docx.js';
 import { HttpError } from '../http.js';
-import { analytics, powerBiDataset, filterOptions } from './analytics.js';
+import { analytics, filterOptions } from './analytics.js';
 
 const fmtKpi = (k) => (k.value === null || k.value === undefined ? '—' : `${k.value}${k.unit ? ` ${k.unit}` : ''}`);
 function filterText(db, a) {
@@ -13,7 +13,7 @@ function filterText(db, a) {
 }
 const stamp = (a) => new Date(a.generatedAt).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
 
-// تقرير Excel: ورقة ملخص + ورقة لكل جدول (قابلة للاستيراد في Power BI أيضاً)
+// تقرير Excel: ورقة ملخص + ورقة لكل جدول
 export function buildReportXlsx(db, query) {
   const a = analytics(db, query);
   const sheets = [{ name: 'ملخص', rows: [['المؤشر', 'القيمة', 'ملاحظة'], ...a.kpis.map((k) => [k.label, k.value ?? '', k.hint ?? k.unit ?? '']), [], ['المرشحات', filterText(db, a)], ['وقت الإنشاء', stamp(a)]], widths: [34, 18, 36] }];
@@ -23,13 +23,6 @@ export function buildReportXlsx(db, query) {
     sheets.push({ name, rows: [t.headers, ...t.rows], widths: [34, ...t.headers.slice(1).map(() => 18)] });
   });
   return writeXlsx(sheets, { title: 'تقرير الإحصاءات' });
-}
-
-// نموذج بيانات Power BI: ملف Excel بجداول حقائق وأبعاد (Get data ← Excel في Power BI Desktop)
-export function buildDatasetXlsx(db) {
-  const ds = powerBiDataset(db);
-  const readme = [['Table', 'Description'], ['Faculties', 'dimension: الكليات والمعاهد (FacultyId)'], ['Students', 'fact: طالب لكل صف، بلا أسماء ولا أرقام وطنية'], ['Requests', 'fact: طلب لكل صف'], ['Courses', 'dimension: المقررات'], ['Grades', 'fact: علامة لكل صف (Passed=1 إن ≥ 60)'], ['Complaints', 'fact: شكوى لكل صف'], [], ['Relationships', 'Students[FacultyId], Requests[FacultyId], Courses[FacultyId], Grades[FacultyId], Complaints[FacultyId] → Faculties[FacultyId]; Grades[CourseId] → Courses[CourseId]; Requests/Grades/Complaints[StudentNo] → Students[StudentNo]'], ['Generated', new Date().toISOString()]];
-  return writeXlsx([{ name: 'README', rows: readme, widths: [18, 120], rtl: false }, ...ds.map((s) => ({ name: s.name, rows: s.rows, rtl: false, widths: s.rows[0].map(() => 18) }))], { title: 'Power BI dataset' });
 }
 
 // تقرير Word: الصور (JPEG) تُرسَل من المتصفح، والأرقام تُحسب هنا من القاعدة (لا يُوثَق برقم من العميل)

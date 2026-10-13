@@ -114,4 +114,21 @@ export async function resetUserPassword({ db, cfg }, actor, id, ip) {
   });
   return { credentials: { username: u.username, tempPassword: pw } };
 }
+// حذف حساب إداري: لا حذف للنفس ولا لآخر مدير؛ والحساب المرتبط بسجلات (قرارات، علامات، أخبار...) يُعطَّل بدلاً من حذفه حفاظاً على السجل
+export function deleteUser({ db }, actor, id, ip) {
+  const u = target(db, actor, id);
+  if (u.id === actor.id) throw bad('لا يمكنك حذف حسابك بنفسك.', 'bad_request');
+  if (u.role === 'admin' && !u.role_key && u.active && activeAdmins(db) <= 1) throw bad('لا يمكن حذف آخر مدير فعّال.', 'bad_request');
+  try {
+    tx(db, () => {
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+      db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+      audit(db, actor, 'حذف حساب إداري', u.username, ip);
+    });
+  } catch (e) {
+    if (/FOREIGN KEY/i.test(String(e?.message))) throw new HttpError(409, 'الحساب مرتبط بسجلات (طلبات أو علامات أو أخبار)؛ عطّله بدلاً من حذفه.', 'conflict');
+    throw e;
+  }
+  return { ok: true };
+}
 export { ASSIGNABLE };
