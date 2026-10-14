@@ -49,7 +49,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   function viewsFor(role) {
     if (role === 'student') return [['home', 'الرئيسية'], ['guide', 'دليل المواد'], ['grades', 'علاماتي'], ['news', 'الأخبار'], ['tx', 'معاملاتي']];
     // قوائم العاملين تُبنى من الصلاحيات الفعلية لا من اسم الدور، فتصلح للأدوار المخصّصة
-    const v = [];
+    const v = [['overview', 'لوحة التحكم']];
     if (can('request:read_all') || can('request:read_unit') || can('student:read') || can('student:register')) v.push(['affairs', can('student:read') || can('student:register') ? 'شؤون الطلاب' : 'الطلبات']);
     if (can('stats:read')) v.push(['dashboard', 'الإحصاءات']);
     if (can('course:manage') || can('grade:manage')) v.push(['academics', 'المواد والعلامات']);
@@ -312,13 +312,14 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   const BUILTIN = { affairs: affairsView, admin: adminView, audit: auditView };
   function render() {
     const app = $('#app');
+    document.body.classList.remove('sx-on', 'sx-drawer');
     // واجهة الجوال (شريط سفلي وبطاقات) تُعرض فقط للطالب على شاشة صغيرة؛ على الحاسوب تُعرض واجهة سطح المكتب لكل الأدوار
     document.body.classList.toggle('is-m', !!(S.me && S.me.role === 'student' && !S.me.mustChange && UA.isMobile()));
     if (!S.me && S.view !== 'verify') { app.innerHTML = loginView() + siteFoot(); return; }
     if (S.me && S.me.mustChange) { app.innerHTML = mustChangeView(); return; }
     if (S.me && S.me.role === 'student') { app.innerHTML = UA.studentShell(); return; }
     const v = S.view === 'verify' ? verifyView : (UA.views[S.view] || BUILTIN[S.view] || (() => ''));
-    app.innerHTML = header() + '<main>' + v() + '</main></div>' + siteFoot();
+    app.innerHTML = UA.shell ? UA.shell(v()) : header() + '<main>' + v() + '</main></div>' + siteFoot();
   }
   async function loadFor(view) {
     if (!S.me) return;
