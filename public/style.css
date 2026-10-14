@@ -665,3 +665,29 @@ body.sx-on{padding:0}
   .sx-pop{position:fixed;top:59px;inset-inline:12px;width:auto}
 }
 @media print{.sx-side,.sx-top,.sx-foot{display:none}.sx-content{width:100%;margin:0}.sx-main{padding:0}}
+
+/* ---- واجهة الطالب على الحاسوب بالتصميم الجديد ---- */
+.sx-sp{flex:1}
+.sx-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.sx-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--surface2)}
+.sx-tabs button{min-height:36px;padding:6px 16px;border:0;border-radius:7px;color:var(--muted);background:transparent;cursor:pointer;font-size:13px;font-weight:700}
+.sx-tabs button[aria-selected="true"]{color:var(--accent-fg);background:var(--accent);box-shadow:0 3px 10px rgba(13,90,76,.18)}
+.sx-tabs button:focus-visible{outline:2px solid var(--sx-gold);outline-offset:2px}
+.sx-sel{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+.sx-sel select{min-height:38px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;color:var(--fg);background:var(--surface);font:inherit;font-size:13px}
+.sx-sub{margin-top:2px;color:var(--muted);font-size:11.5px;direction:ltr;text-align:start}
+.sx-table tr.sx-prev td{padding:10px 16px 12px;background:var(--surface2);font-size:12.5px;white-space:normal}
+.sx-table td .sx-link{padding:4px 0}
+.sx-det{display:grid;gap:10px;white-space:normal}
+.sx-news{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.sx-newsc{padding:16px;display:grid;align-content:start;gap:6px;border:1px solid var(--line);border-radius:11px;background:var(--surface);cursor:pointer;text-align:start;transition:.18s ease}
+.sx-newsc:hover{border-color:var(--accent);box-shadow:0 6px 18px rgba(18,70,58,.08)}
+.sx-newsc small{color:var(--muted);font-size:11.5px}
+.sx-newsc strong{color:var(--fg);font-size:14.5px;line-height:1.6}
+.sx-newsc span{color:var(--muted);font-size:12.5px;line-height:1.8}
+.sx-newsc:focus-visible{outline:2px solid var(--sx-gold);outline-offset:2px}
+.sx-verify{max-width:760px}
+.sx-empty b{display:block;color:var(--fg);font-size:14px}
+.sx-empty p{margin:6px 0 0}
+@media (max-width:640px){.sx-bar{align-items:stretch}.sx-tabs{width:100%}}
+.sx-sub.rtl{direction:rtl}

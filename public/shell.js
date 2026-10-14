@@ -24,6 +24,7 @@
     arrow: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
+    cap: '<path d="m2 9 10-5 10 5-10 5Z"/><path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
@@ -31,7 +32,7 @@
     out: '<path d="M15 4.5h4.5v15H15"/><path d="M10.5 8l-4 4 4 4M6.5 12h10"/>',
   };
   const ico = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[n] || ''}</svg>`;
-  const NAV_ICON = { overview: 'grid', affairs: 'users', dashboard: 'chart', academics: 'book', comms: 'news', import: 'upload', export: 'download', admin: 'settings', access: 'shield', audit: 'file', verify: 'check' };
+  const NAV_ICON = { overview: 'grid', home: 'grid', guide: 'book', grades: 'chart', tx: 'file', affairs: 'users', dashboard: 'chart', academics: 'book', comms: 'news', import: 'upload', export: 'download', admin: 'settings', access: 'shield', audit: 'file', verify: 'check' };
   const PARENT = { site: 'admin', services: 'admin' };
   const EXTRA_LABEL = { site: 'إعدادات الموقع', services: 'الخدمات' };
 
@@ -149,51 +150,61 @@
   }
   UA.views.overview = homeView;
 
-  /* ---------- الهيكل ---------- */
-  UA.shell = function shell(body) {
+  /* ---------- الهيكل ----------
+     o (اختياري، تستعمله واجهة الطالب): views, act, active, label, root, search, notif {count,text,btn}, badges, help, menu */
+  UA.shell = function shell(body, o = {}) {
     document.body.classList.add('sx-on');
-    const views = UA.viewsFor(S.me.role);
-    const activeKey = PARENT[S.view] || S.view;
-    const label = (views.find((v) => v[0] === S.view) || [])[1] || EXTRA_LABEL[S.view] || '';
-    const review = pending();
+    const views = o.views || UA.viewsFor(S.me.role);
+    const act = o.act || 'view';
+    const activeKey = o.active || PARENT[S.view] || S.view;
+    const label = o.label || (views.find((v) => v[0] === S.view) || [])[1] || EXTRA_LABEL[S.view] || '';
+    const review = o.notif ? o.notif.count : pending();
     const comp = X.data && X.data.analytics && X.data.analytics.kpis.find((k) => k.id === 'complaints');
-    const badge = (k) => (k === 'affairs' && review ? `<small>${review}</small>` : (k === 'comms' && comp && comp.value ? `<small>${comp.value}</small>` : ''));
-    const nav = views.map((v) => `<button data-act="view" data-v="${v[0]}"${activeKey === v[0] ? ' aria-current="page"' : ''}>${ico(NAV_ICON[v[0]] || 'file')}<span>${esc(v[1])}</span>${badge(v[0])}</button>`).join('');
+    const badge = (k) => {
+      if (o.badges) return o.badges[k] ? `<small>${o.badges[k]}</small>` : '';
+      return k === 'affairs' && review ? `<small>${review}</small>` : (k === 'comms' && comp && comp.value ? `<small>${comp.value}</small>` : '');
+    };
+    const nav = views.map((v) => `<button data-act="${act}" data-v="${v[0]}"${activeKey === v[0] ? ' aria-current="page"' : ''}>${ico(NAV_ICON[v[0]] || 'file')}<span>${esc(v[1])}</span>${badge(v[0])}</button>`).join('');
     const uni = String(S.uni || ''), cut = uni.indexOf(' للعلوم');
     const brand1 = cut > 0 ? uni.slice(0, cut) : uni, brand2 = cut > 0 ? uni.slice(cut + 1) : 'نظام إدارة الجامعة';
     const role = S.me.roleLabel || UA.ROLE_LABEL[S.me.role] || '';
+    const help = o.help || `<div class="sx-help"><i>${ico('shield', 22)}</i><strong>التحقق من الوثائق</strong><p>تحقّق من صحة أي وثيقة صادرة عن الجامعة.</p><button data-act="view" data-v="verify">فتح صفحة التحقق ${ico('arrow', 15)}</button></div>`;
+    const notifBody = o.notif ? `<p>${o.notif.text}</p>${o.notif.btn || ''}` : `<p>${review ? `لديك ${review} طلب قيد المراجعة.` : 'لا توجد إشعارات جديدة.'}</p>${review ? '<button data-sx="go" data-v="affairs">عرض الطلبات</button>' : ''}`;
+    const menu = o.menu || `<button class="sx-menu-item" data-act="logout">${ico('out', 18)} تسجيل الخروج</button>`;
+    const search = o.search === false ? '<div class="sx-sp"></div>' : `<label class="sx-search">${ico('search', 19)}<input id="sx-q" type="search" placeholder="${can('student:read') ? 'ابحث عن طالب بالاسم أو الرقم الجامعي...' : 'ابحث...'}" autocomplete="off"><kbd>Ctrl K</kbd></label>`;
     return `<div class="sx-shell" dir="rtl">
       <button class="sx-backdrop" data-sx="close" aria-label="إغلاق القائمة"></button>
       <aside class="sx-side" aria-label="القائمة الجانبية">
         <div class="sx-brand"><img src="/brand/crest.svg" alt="" width="42" height="48"><div><strong>${esc(brand1)}</strong><span>${esc(brand2)}</span></div><button class="sx-ib sx-close" data-sx="close" aria-label="إغلاق" style="color:#fff">${ico('close')}</button></div>
         <div class="sx-navlabel">القائمة الرئيسية</div>
         <nav class="sx-nav" aria-label="القائمة الرئيسية">${nav}</nav>
-        <div class="sx-help"><i>${ico('shield', 22)}</i><strong>التحقق من الوثائق</strong><p>تحقّق من صحة أي وثيقة صادرة عن الجامعة.</p><button data-act="view" data-v="verify">فتح صفحة التحقق ${ico('arrow', 15)}</button></div>
+        ${help}
         <div class="sx-state"><i></i> النظام يعمل بشكل طبيعي</div>
       </aside>
       <div class="sx-content">
         <header class="sx-top">
           <button class="sx-ib sx-burger" data-sx="open" aria-label="فتح القائمة">${ico('menu')}</button>
-          <div class="sx-crumbs"><span>نظام إدارة الجامعة</span>${ico('chevron', 15)}<strong>${esc(label)}</strong></div>
-          <label class="sx-search">${ico('search', 19)}<input id="sx-q" type="search" placeholder="${can('student:read') ? 'ابحث عن طالب بالاسم أو الرقم الجامعي...' : 'ابحث...'}" autocomplete="off"><kbd>Ctrl K</kbd></label>
+          <div class="sx-crumbs"><span>${esc(o.root || 'نظام إدارة الجامعة')}</span>${ico('chevron', 15)}<strong>${esc(label)}</strong></div>
+          ${search}
           <div class="sx-actions">
             <div class="sx-wrap"><button class="sx-ib" data-sx="notif" aria-label="الإشعارات">${ico('bell')}${review ? '<i class="sx-dot"></i>' : ''}</button>
-              <div class="sx-pop" id="sx-notif" hidden><strong>الإشعارات</strong><p>${review ? `لديك ${review} طلب قيد المراجعة.` : 'لا توجد إشعارات جديدة.'}</p>${review ? '<button data-sx="go" data-v="affairs">عرض الطلبات</button>' : ''}</div></div>
+              <div class="sx-pop" id="sx-notif" hidden><strong>الإشعارات</strong>${notifBody}</div></div>
             <div class="sx-sep"></div>
             <div class="sx-wrap"><button class="sx-profile" data-sx="profile" aria-label="قائمة المستخدم"><span class="sx-av">${esc(initials(S.me.name))}</span><span><strong>${esc(S.me.name)}</strong><small>${esc(role)}</small></span>${ico('chevron', 15)}</button>
-              <div class="sx-pop" id="sx-menu" hidden><button class="sx-menu-item" data-act="logout">${ico('out', 18)} تسجيل الخروج</button></div></div>
+              <div class="sx-pop" id="sx-menu" hidden>${menu}</div></div>
           </div>
         </header>
         <main class="sx-main"><div class="sx-page">${body}</div></main>
         <footer class="sx-foot"><span>© 2026 ${esc(S.uni)}</span><span>جميع الحقوق محفوظة</span></footer>
       </div></div>`;
   };
+  UA.sx = { ico, initials, ago, dateLong, nf, statCard };
 
   /* ---------- الأحداث ---------- */
   const pops = () => [document.getElementById('sx-notif'), document.getElementById('sx-menu')].filter(Boolean);
   document.addEventListener('click', async (e) => {
     const t = e.target.closest && e.target.closest('[data-sx]');
-    if (!t) { if (!(e.target.closest && e.target.closest('.sx-pop'))) pops().forEach((p) => { p.hidden = true; }); return; }
+    if (!t) { if (!(e.target.closest && e.target.closest('.sx-pop') && !e.target.closest('[data-act]'))) pops().forEach((p) => { p.hidden = true; }); return; }
     const a = t.dataset.sx;
     if (a === 'open') document.body.classList.add('sx-drawer');
     else if (a === 'close') document.body.classList.remove('sx-drawer');
