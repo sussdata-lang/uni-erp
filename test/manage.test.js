@@ -164,3 +164,13 @@ test('التصدير: لا خيار Power BI، والتدقيق سليم بعد 
   assert.ok(!/(^|\n)\s*body \*\{visibility:hidden\}/.test(css), 'قاعدة إخفاء الصفحة يجب أن تكون محصورة بـ body.print-cred');
   assert.equal(verifyAuditChain(app.db).ok, true);
 });
+
+test('مدة الدراسة: كلية العلوم الأمنية 3 سنوات والأمن السيبراني 4', async () => {
+  const yrs = Object.fromEntries(app.db.prepare('SELECT f.code, g.years FROM programs g JOIN faculties f ON f.id = g.faculty_id').all().map((r) => [r.code, r.years]));
+  assert.equal(yrs.CSS, 3); assert.equal(yrs.CCS, 4);
+  const css = app.db.prepare("SELECT g.id FROM programs g JOIN faculties f ON f.id = g.faculty_id WHERE f.code = 'CSS'").get().id;
+  const ccs = app.db.prepare("SELECT g.id FROM programs g JOIN faculties f ON f.id = g.faculty_id WHERE f.code = 'CCS'").get().id;
+  const add = (pid, level) => api('POST', '/api/courses', { cookie: staff, body: { programId: pid, level, semester: 1, name: `م${pid}-${level}`, hours: 3 } });
+  assert.equal((await add(css, 3)).status, 201); assert.equal((await add(css, 4)).status, 400);
+  assert.equal((await add(ccs, 4)).status, 201);
+});
