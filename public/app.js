@@ -1,5 +1,5 @@
 'use strict';
-window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studentShell: () => '' };
+window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studentShell: () => '', mq: window.matchMedia('(max-width: 820px)'), isMobile() { return this.mq.matches; }, icon: (n, s, x) => (window.suIcon ? window.suIcon(n, s, x) : '') };
 (function () {
   const UA = window.UA;
   /* ---------- أدوات ---------- */
@@ -55,6 +55,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     if (can('course:manage') || can('grade:manage')) v.push(['academics', 'المواد والعلامات']);
     if (can('news:manage') || can('complaint:manage')) v.push(['comms', 'الأخبار والشكاوى']);
     if (can('student:register') || can('course:manage') || can('grade:manage')) v.push(['import', 'الاستيراد']);
+    if (can('data:export')) v.push(['export', 'التصدير']);
     if (can('holds:manage') || can('rules:manage') || can('program:manage')) v.push(['admin', 'الإدارة']);
     if (can('user:manage') || can('role:manage')) v.push(['access', 'الحسابات والصلاحيات']);
     if (can('audit:read')) v.push(['audit', 'التدقيق']);
@@ -94,7 +95,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
   const siteFoot = () => `<footer class="site-foot"><div class="wrap"><div class="f-brand"><img class="crest sm" src="/brand/crest.svg" alt=""><div><b>${esc(S.uni)}</b><span class="gold">وزارة الداخلية · دمشق</span></div></div><div>جميع الحقوق محفوظة للجامعة السورية للعلوم الأمنية © 2026</div></div></footer>`;
   function header() {
-    const tabs = viewsFor(S.me?.role ?? 'public').map((t) => `<button class="tab" role="tab" data-act="view" data-v="${t[0]}" aria-selected="${S.view === t[0]}">${t[1]}</button>`).join('');
+    const tabs = viewsFor(S.me?.role ?? 'public').map((t) => `<button class="tab" role="tab" data-act="view" data-v="${t[0]}" aria-selected="${S.view === t[0]}">${UA.icon(t[0], 18)}<span>${t[1]}</span></button>`).join('');
     const who = S.me ? `<div class="who"><span><b>${esc(S.me.name)}</b> · ${esc(S.me.roleLabel || ROLE_LABEL[S.me.role])}${S.me.unit ? ` · ${esc(S.me.unit.name)}` : ''}</span><button class="btn sm" data-act="logout">خروج</button></div>`
       : '<div class="who"><button class="btn sm" data-act="tologin">تسجيل الدخول</button></div>';
     return `<header class="top"><div class="wrap"><div class="brand"><img class="crest" src="/brand/crest.svg" alt="" width="40" height="48"><div class="t"><b>نظام إدارة وأتمتة البيانات في الجامعة السورية للعلوم الأمنية</b><span>${esc(S.uni)} · قسم شؤون الطلاب</span></div></div>
@@ -311,7 +312,8 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   const BUILTIN = { affairs: affairsView, admin: adminView, audit: auditView };
   function render() {
     const app = $('#app');
-    document.body.classList.toggle('is-m', !!(S.me && S.me.role === 'student' && !S.me.mustChange));
+    // واجهة الجوال (شريط سفلي وبطاقات) تُعرض فقط للطالب على شاشة صغيرة؛ على الحاسوب تُعرض واجهة سطح المكتب لكل الأدوار
+    document.body.classList.toggle('is-m', !!(S.me && S.me.role === 'student' && !S.me.mustChange && UA.isMobile()));
     if (!S.me && S.view !== 'verify') { app.innerHTML = loginView() + siteFoot(); return; }
     if (S.me && S.me.mustChange) { app.innerHTML = mustChangeView(); return; }
     if (S.me && S.me.role === 'student') { app.innerHTML = UA.studentShell(); return; }
@@ -509,5 +511,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       if (!S.vres.valid && S.vres.reason === 'not_found') toast('لا توجد شهادة بهذه البصمة؛ الملف مختلف عن النسخة الأصلية أو ليس من إصدار الجامعة');
     } catch (err) { if (!err.status) throw err; toast(err.message); }
   });
-  Object.assign(UA, { upload, mediaHtml, viewsFor, S, api, esc, fmt, dur, $, val, toast, render, guard, go, loadFor, can, pill, steps, detailsText, events, docHtml, verifyView, readFile, afterLogin, ROLE_LABEL });
+  // التبديل التلقائي بين عرض الحاسوب والجوال عند تغيّر عرض النافذة (تدوير الجهاز أو تغيير حجم النافذة)
+  try { UA.mq.addEventListener('change', () => { if (S.me) { $('#layer').innerHTML = ''; render(); } }); } catch { /* متصفح قديم */ }
+  Object.assign(UA, { header, siteFoot, upload, mediaHtml, viewsFor, S, api, esc, fmt, dur, $, val, toast, render, guard, go, loadFor, can, pill, steps, detailsText, events, docHtml, verifyView, readFile, afterLogin, ROLE_LABEL });
 })();

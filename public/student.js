@@ -11,26 +11,9 @@
   UA.reset = () => Object.assign(T, { profile: null, news: null, courses: null, grades: null, reqs: null, cmps: null, loading: {}, guide: { level: null, sem: '' }, gr: { level: null, sem: '', open: {} }, openReq: {}, wz: null });
 
   /* ---------- أيقونات ---------- */
-  const svg = (d, extra = '') => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
-  const IC = {
-    home: svg('<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>'),
-    guide: svg('<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/>'),
-    grades: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l2.5-5 2.5 5M8 13.5h3"/><path d="M15 10v5M13 12.5h4"/>'),
-    news: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/>'),
-    tx: svg('<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/>'),
-    cap: svg('<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/>'),
-    doc: svg('<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/>'),
-    bed: svg('<path d="M3 18V7M3 14h18v4M21 14v-2a3 3 0 00-3-3h-7v5"/><circle cx="7" cy="11" r="1.5"/>'),
-    back: svg('<path d="M9 5l7 7-7 7"/>'),
-    plus: svg('<path d="M12 5v14M5 12h14"/>'),
-    out: svg('<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>'),
-    edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/>'),
-    lock: svg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>'),
-    help: svg('<path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>'),
-    check: svg('<path d="M5 12l5 5 9-10"/>', 'width="16" height="16"'),
-    cross: svg('<path d="M6 6l12 12M18 6L6 18"/>', 'width="16" height="16"'),
-    shield: svg('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'),
-  };
+  // الأيقونات من المجموعة الموحّدة بهوية الجامعة (public/icons.js)
+  const IC = Object.fromEntries(['home', 'guide', 'grades', 'news', 'tx', 'cap', 'doc', 'bed', 'back', 'plus', 'out', 'edit', 'lock', 'help', 'shield'].map((k) => [k, UA.icon(k === 'doc' ? 'tx' : k)]));
+  IC.check = UA.icon('check', 16); IC.cross = UA.icon('cross', 16);
   const svcIcon = (c) => ({ transcript: IC.doc, excellence_year: IC.cap, campus_life: IC.bed }[c] || IC.doc);
   const emblem = `<img class="emblem" src="/brand/crest.svg" alt="شعار الجامعة" width="87" height="104">`;
 
@@ -82,7 +65,7 @@
     return pageHead('علاماتي') + levelChips('grlvl', lv) + semSelect('grsem', T.gr.sem) + `<div class="m-list">${body}</div>`;
   }
   function newsPage() {
-    const body = !T.news ? sk(5) : (T.news.length ? T.news.map((n) => `<button class="m-news-r" data-act="newsopen" data-id="${n.id}"><span class="t"><small>${esc(day(n.publishedAt))}${n.pinned ? ' · 📌 مثبّت' : ''}</small><b>${esc(n.title)}</b><span class="ex">${esc(n.body.length > 90 ? n.body.slice(0, 90) + '…' : n.body)}</span></span>${(n.media.find((m) => m.kind === 'image') || {}).src ? `<img class="th" src="${esc(n.media.find((m) => m.kind === 'image').src)}" alt="" loading="lazy">` : (n.media.length ? '<span class="th vid-ic" aria-hidden="true">▶</span>' : '')}</button>`).join('') : empty('لا أخبار حالياً'));
+    const body = !T.news ? sk(5) : (T.news.length ? T.news.map((n) => `<button class="m-news-r" data-act="newsopen" data-id="${n.id}"><span class="t"><small>${esc(day(n.publishedAt))}${n.pinned ? ' · ' + UA.icon('pin', 14) + ' مثبّت' : ''}</small><b>${esc(n.title)}</b><span class="ex">${esc(n.body.length > 90 ? n.body.slice(0, 90) + '…' : n.body)}</span></span>${(n.media.find((m) => m.kind === 'image') || {}).src ? `<img class="th" src="${esc(n.media.find((m) => m.kind === 'image').src)}" alt="" loading="lazy">` : (n.media.length ? '<span class="th vid-ic" aria-hidden="true">▶</span>' : '')}</button>`).join('') : empty('لا أخبار حالياً'));
     return pageHead('التعميمات والأخبار') + `<div class="m-list">${body}</div>`;
   }
   function reqCard(r) {
@@ -96,7 +79,7 @@
     if (!T.reqs) body = sk(4);
     else if (!T.reqs.length) body = `<div class="m-empty big"><b>لا يوجد معاملات سابقة لك</b><p>إذا كنت ترغب في الحصول على معاملة جديدة وبسهولة مطلقة، ما عليك إلا أن تبدأ بإنشاء واحدة الآن</p><button class="m-btn" data-act="wzstart">إنشاء معاملة جديدة ${IC.plus}</button></div>`;
     else body = T.reqs.map(reqCard).join('');
-    return pageHead('المعاملات') + `<div class="m-list">${body}</div><button class="m-fab" data-act="wzstart" aria-label="إنشاء معاملة جديدة">${IC.plus}</button>`;
+    return pageHead('المعاملات', `<button class="btn pri sm m-newtx" data-act="wzstart">${IC.plus}<span>إنشاء معاملة جديدة</span></button>`) + `<div class="m-list">${body}</div><button class="m-fab" data-act="wzstart" aria-label="إنشاء معاملة جديدة">${IC.plus}</button>`;
   }
 
   /* ---------- الهيكل العام ---------- */
@@ -106,6 +89,12 @@
     if (S.view === 'verify') page = `<div class="m-verify"><button class="m-back" data-act="snav" data-v="home" aria-label="رجوع">${IC.back}<span>رجوع</span></button>${UA.verifyView()}</div>`;
     else page = ({ home: homePage, guide: guidePage, grades: gradesPage, news: newsPage, tx: txPage }[S.view] || homePage)();
     const act = S.view === 'verify' ? 'home' : S.view;
+    if (!UA.isMobile()) {                       // الحاسوب: ترويسة الموقع المعتادة وصفحات بعرض كامل بدل الشريط السفلي
+      const tabs = nav.map(([k, l]) => `<button class="tab" role="tab" data-act="snav" data-v="${k}" aria-selected="${act === k}">${UA.icon(k, 18)}<span>${l}</span></button>`).join('');
+      return `<header class="top"><div class="wrap"><div class="brand"><img class="crest" src="/brand/crest.svg" alt="" width="40" height="48"><div class="t"><b>بوابة خدمات الطلاب</b><span>${esc(S.uni)} · قسم شؤون الطلاب</span></div></div>
+        <div class="tabs" role="tablist">${tabs}</div><div class="who"><span><b>${esc(S.me.name)}</b></span><button class="btn sm" data-act="drawer">${UA.icon('edit', 16)}<span>الملف الشخصي</span></button><button class="btn sm" data-act="logout">خروج</button></div></div></header>
+        <div class="wrap m-desk"><main class="m-main">${page}</main></div>${UA.siteFoot()}`;
+    }
     return `<div class="m-app"><main class="m-main">${page}</main><nav class="m-nav" aria-label="التنقل الرئيسي">${nav.map(([k, l]) => `<button data-act="snav" data-v="${k}" aria-current="${act === k ? 'page' : 'false'}">${IC[{ home: 'home', guide: 'guide', grades: 'grades', news: 'news', tx: 'tx' }[k]]}<span>${l}</span></button>`).join('')}</nav></div>`;
   };
 

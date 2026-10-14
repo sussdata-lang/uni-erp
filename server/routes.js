@@ -12,6 +12,7 @@ import { registrationOptions, registerStudent, listStudents, getStudent, updateS
 import { listCourses, createCourse, toggleCourse, updateCourse, deleteCourse, myGrades, gradesFor, enterGrade, deleteGrade, listNews, createNews, updateNews, deleteNews, createComplaint, listComplaints, respondComplaint, deleteComplaint } from './services/academics.js';
 import { createRequest, listRequests, getRequest, decide, forwardRequest, stats, readAttachment } from './services/requests.js';
 import { getDocument, verifyPublic } from './services/documents.js';
+import { exportOptions, preview as exportPreview, renderExport } from './services/dataexport.js';
 import { audit, verifyAuditChain } from './audit.js';
 import { qrSvg } from './qr.js';
 
@@ -128,6 +129,16 @@ export function buildRouter(deps) {
     sendRaw(c.res, 200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': 'attachment; filename="statistics-report.docx"' }, buildReportDocx(db, c.body));
   }, { maxBody: 14 * 1024 * 1024 });
   r.add('GET', '/api/stats', (c) => { need(c, 'stats:read'); c.json(200, { stats: stats(deps) }); });
+
+  // ---- تصدير البيانات (طلاب، مواد، علامات...) ----
+  r.add('GET', '/api/export/options', (c) => { need(c, 'data:export'); c.json(200, exportOptions(db)); });
+  r.add('GET', '/api/export/preview', (c) => { need(c, 'data:export'); c.json(200, exportPreview(db, String(c.query.dataset ?? ''), c.query)); });
+  r.add('GET', '/api/export/file', (c) => {
+    need(c, 'data:export');
+    const out = renderExport(db, { dataset: String(c.query.dataset ?? ''), format: String(c.query.format ?? ''), layout: c.query.layout }, c.query);
+    audit(db, c.user, `تصدير بيانات (${c.query.dataset}، ${c.query.format}، ${out.total} صفاً)`, out.name.slice(0, 80), c.ip);
+    sendRaw(c.res, 200, { 'Content-Type': out.mime, 'Content-Disposition': `attachment; filename="${out.name}"` }, out.buf);
+  });
 
   // ---- الوثائق والتحقق ----
   r.add('GET', '/api/documents/:code', (c) => c.json(200, { document: getDocument(deps, c.user, c.params.code) }));

@@ -67,7 +67,7 @@ export function sections(db) {
       F('ministerial_no', 'الرقم الوزاري', 'text', { max: 20, hint: 'رقم القبول الوزاري إن وُجد' }),
       F('enroll_year', 'سنة القيد', 'int', { required: true, min: 1980, max: year + 1, default: year }),
       F('enroll_term', 'فصل القيد', 'select', { required: true, options: opts(['الفصل الأول', 'الفصل الثاني', 'الفصل الصيفي']), default: 'الفصل الأول' }),
-      F('study_level', 'السنة الدراسية الحالية', 'select', { required: true, options: opts([1, 2, 3, 4, 5, 6, 7].map((n) => ({ v: n, l: levelLabel(n) }))), default: 1 }),
+      F('study_level', 'السنة الدراسية الحالية', 'select', { required: true, options: opts([1, 2, 3, 4].map((n) => ({ v: n, l: levelLabel(n) }))), default: 1 }),
       F('status', 'حالة القيد', 'select', { required: true, editOnly: true, default: 'active', options: opts(Object.entries(STATUS_LABEL).map(([v, l]) => ({ v, l }))) }),
     ] },
     { id: 'guardian', title: 'ولي الأمر وجهة الطوارئ', fields: [
@@ -204,7 +204,7 @@ function view(db, r, { full = true, own = false } = {}) {
 }
 
 export function registrationOptions(db, canManage) {
-  return { sections: sections(db), levels: 7, statuses: STATUS_LABEL, canManagePrograms: canManage };
+  return { sections: sections(db), levels: 4, statuses: STATUS_LABEL, canManagePrograms: canManage };
 }
 
 /* ---------------- العمليات ---------------- */
@@ -333,7 +333,7 @@ export function addFaculty({ db }, actor, b, ip) {
   if (db.prepare('SELECT 1 FROM faculties WHERE name = ?').get(name)) throw new HttpError(409, 'يوجد جهة بهذا الاسم.', 'conflict');
   if (db.prepare('SELECT 1 FROM faculties WHERE code = ?').get(code)) throw new HttpError(409, `الرمز ${code} مستخدم لجهة أخرى؛ اختر رمزاً مختلفاً.`, 'conflict');
   const years = Number(b?.years ?? (kind === 'college' ? 4 : 2)), degree = String(b?.degree ?? '').trim() || (kind === 'college' ? 'بكالوريوس' : 'دبلوم');
-  if (!Number.isInteger(years) || years < 1 || years > 7) throw new HttpError(400, 'مدة البرنامج بين 1 و7 سنوات.', 'validation');
+  if (!Number.isInteger(years) || years < 1 || years > 4) throw new HttpError(400, 'مدة البرنامج بين 1 و4 سنوات.', 'validation');
   const id = tx(db, () => {
     const fid = Number(db.prepare('INSERT INTO faculties (name, name_en, code, kind) VALUES (?,?,?,?)').run(name, nameEn, code, kind).lastInsertRowid);
     db.prepare('INSERT INTO programs (faculty, name, degree, years, faculty_id) VALUES (?,?,?,?,?)').run(name, name, degree, years, fid);
@@ -365,7 +365,7 @@ export function addProgram({ db }, actor, b, ip) {
   const fac = db.prepare('SELECT id, name, active FROM faculties WHERE id = ?').get(Number(b?.facultyId));
   if (!fac) throw new HttpError(400, 'اختر الكلية أو المعهد من القائمة.', 'validation');
   if (!fac.active) throw new HttpError(400, 'هذه الجهة معطَّلة.', 'validation');
-  if (!Number.isInteger(years) || years < 1 || years > 7) throw new HttpError(400, 'مدة البرنامج بين 1 و7 سنوات.', 'validation');
+  if (!Number.isInteger(years) || years < 1 || years > 4) throw new HttpError(400, 'مدة البرنامج بين 1 و4 سنوات.', 'validation');
   if (db.prepare('SELECT 1 FROM programs WHERE faculty = ? AND name = ? AND degree = ?').get(fac.name, name, degree)) throw new HttpError(409, 'البرنامج موجود مسبقاً.', 'conflict');
   const id = Number(db.prepare('INSERT INTO programs (faculty, name, degree, years, faculty_id) VALUES (?,?,?,?,?)').run(fac.name, name, degree, years, fac.id).lastInsertRowid);
   audit(db, actor, 'إضافة برنامج أكاديمي', `${fac.name} / ${name}`.slice(0, 100), ip);
@@ -452,7 +452,7 @@ export function updateProgram({ db }, actor, id, b, ip) {
   if (!p) throw new HttpError(404, 'البرنامج غير موجود.', 'not_found');
   const t = (v, n) => { const s = String(v ?? '').replace(/\s+/g, ' ').trim(); if (!s || s.length > n || CTRL.test(s)) throw new HttpError(400, 'بيانات البرنامج غير صالحة.', 'validation'); return s; };
   const name = t(b?.name ?? p.name, 80), degree = t(b?.degree ?? p.degree, 30), years = Number(b?.years ?? p.years);
-  if (!Number.isInteger(years) || years < 1 || years > 7) throw new HttpError(400, 'مدة البرنامج بين 1 و7 سنوات.', 'validation');
+  if (!Number.isInteger(years) || years < 1 || years > 4) throw new HttpError(400, 'مدة البرنامج بين 1 و4 سنوات.', 'validation');
   const maxLevel = db.prepare('SELECT MAX(study_level) m FROM student_profiles WHERE program_id = ?').get(p.id).m ?? 0;
   const maxCourse = db.prepare('SELECT MAX(level) m FROM courses WHERE program_id = ?').get(p.id).m ?? 0;
   if (years < Math.max(maxLevel, maxCourse)) throw new HttpError(409, `لا يمكن تقليل المدة إلى ${years}: يوجد طلاب أو مقررات في السنة ${Math.max(maxLevel, maxCourse)}.`, 'conflict');

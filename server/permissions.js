@@ -29,6 +29,7 @@ export const PERMISSION_CATALOG = [
     ['complaint:manage', 'الرد على الشكاوى'],
   ] },
   { group: 'الإدارة والرقابة', items: [
+    ['data:export',  'تصدير البيانات (طلاب، مواد، علامات...)'],
     ['audit:read',   'قراءة سجل التدقيق'],
     ['rules:manage', 'إدارة قواعد الفحص الآلي'],
     ['user:manage',  'إدارة الحسابات الإدارية'],
@@ -52,7 +53,7 @@ export const PERMISSIONS = {
   student: STUDENT,
   staff:   ['request:read_all', 'request:decide', 'request:forward', 'document:read_all', 'stats:read',
             'student:register', 'student:read', 'student:update', 'student:reset_password',
-            'course:manage', 'grade:manage', 'news:manage', 'complaint:manage'],
+            'course:manage', 'grade:manage', 'news:manage', 'complaint:manage', 'data:export'],
   auditor: ['request:read_all', 'document:read_all', 'audit:read', 'stats:read'],
   admin:   [...ASSIGNABLE],            // المدير يملك كل الصلاحيات القابلة للإسناد (ومنها ما يُضاف مستقبلاً للفهرس)
 };

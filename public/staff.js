@@ -11,7 +11,8 @@
 
   const bar = (tabs, cur, act) => `<div class="sub-tabs no-print" role="tablist">${tabs.map((t) => `<button class="chip" role="tab" data-act="${act}" data-t="${t[0]}" aria-pressed="${cur === t[0]}">${t[1]}</button>`).join('')}</div>`;
   const progOpts = (sel) => A.programs.map((p) => `<option value="${p.id}"${String(p.id) === String(sel) ? ' selected' : ''}>${esc(p.label || p.name)}</option>`).join('');
-  const lvlOpts = (sel, all) => (all ? '<option value="">كل السنوات</option>' : '') + [1, 2, 3, 4, 5].map((n) => `<option value="${n}"${String(n) === String(sel) ? ' selected' : ''}>${lvl(n)}</option>`).join('');
+  const yrs = (pid) => ((A.programs.find((p) => String(p.id) === String(pid)) || {}).years) || 4;   // مدة البرنامج: 3 للكلية الأمنية و4 للأمن السيبراني
+  const lvlOpts = (sel, all, progId = A.program) => (all ? '<option value="">كل السنوات</option>' : '') + Array.from({ length: yrs(progId) }, (_, i) => i + 1).map((n) => `<option value="${n}"${String(n) === String(sel) ? ' selected' : ''}>${lvl(n)}</option>`).join('');
 
   /* ---------- المواد والعلامات ---------- */
   async function loadCourses() {
@@ -31,7 +32,7 @@
       <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>السنة</th><th>الفصل</th><th>المقرر</th><th>ساعات</th><th>المدرّس</th><th>الحالة</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="empty">لا مقررات بعد لهذا البرنامج. أضف أول مقرر من النموذج المجاور.</td></tr>'}</tbody></table></div></section>
       <section class="card"><h2>${ce ? 'تعديل مقرر' : 'إضافة مقرر'}</h2><form class="form" id="acadd" style="border:0;margin:0;padding:0">
         <label>البرنامج<select id="ac-nprog"${ce ? ' disabled' : ''}>${progOpts(ce ? ce.programId : A.program)}</select></label>
-        <div class="two"><label>السنة الدراسية<select id="ac-nlvl">${lvlOpts(ce ? ce.level : (A.level || 1))}</select></label><label>الفصل<select id="ac-nsem"><option value="1"${ce && ce.semester === 1 ? ' selected' : ''}>الأول</option><option value="2"${ce && ce.semester === 2 ? ' selected' : ''}>الثاني</option></select></label></div>
+        <div class="two"><label>السنة الدراسية<select id="ac-nlvl">${lvlOpts(ce ? ce.level : (A.level || 1), false, ce ? ce.programId : A.program)}</select></label><label>الفصل<select id="ac-nsem"><option value="1"${ce && ce.semester === 1 ? ' selected' : ''}>الأول</option><option value="2"${ce && ce.semester === 2 ? ' selected' : ''}>الثاني</option></select></label></div>
         <label>اسم المقرر<input id="ac-nname" maxlength="100" required value="${ce ? esc(ce.name) : ''}"></label>
         <div class="two"><label>الساعات<input id="ac-nhours" type="number" min="0" max="12" value="${ce ? ce.hours : 3}"></label><label>الرمز (اختياري)<input id="ac-ncode" maxlength="20" dir="ltr" value="${ce ? esc(ce.code || '') : ''}"></label></div>
         <label>المدرّس (اختياري)<input id="ac-ninst" maxlength="80" value="${ce ? esc(ce.instructor || '') : ''}"></label>
@@ -115,7 +116,7 @@
         <p class="small">الرفع: صور حتى 5 ميغابايت (jpg/png/webp/gif) وفيديو حتى 50 ميغابايت (mp4/webm). الروابط: صورة أو فيديو مباشر (https) أو يوتيوب أو فيميو. حتى 8 وسائط للخبر.</p>
         `}<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input id="nw-pin" type="checkbox" style="width:auto"${ne && ne.pinned ? ' checked' : ''}> تثبيت في أعلى القائمة</label>
         <div class="actions" style="margin:0"><button class="btn pri" type="submit">${ne ? 'حفظ التعديل' : 'نشر'}</button>${ne ? '<button class="btn" type="button" data-act="newscancel">إلغاء</button>' : ''}</div></form></section>
-      <section class="card"><h2>الأخبار المنشورة <span class="small">(${A.news.length})</span></h2>${A.news.length ? A.news.map((n) => `<article class="req"><div class="req-h"><b>${n.pinned ? '📌 ' : ''}${esc(n.title)}</b><span style="white-space:nowrap"><button class="btn sm" data-act="newsedit" data-id="${n.id}">تعديل</button> <button class="btn sm bad" data-act="newsdel" data-id="${n.id}">حذف</button></span></div><div class="no">${fmt(n.publishedAt)}</div><div class="hint" style="white-space:pre-wrap">${esc(n.body.length > 220 ? n.body.slice(0, 220) + '…' : n.body)}</div>
+      <section class="card"><h2>الأخبار المنشورة <span class="small">(${A.news.length})</span></h2>${A.news.length ? A.news.map((n) => `<article class="req"><div class="req-h"><b>${n.pinned ? UA.icon('pin', 16) + ' ' : ''}${esc(n.title)}</b><span style="white-space:nowrap"><button class="btn sm" data-act="newsedit" data-id="${n.id}">تعديل</button> <button class="btn sm bad" data-act="newsdel" data-id="${n.id}">حذف</button></span></div><div class="no">${fmt(n.publishedAt)}</div><div class="hint" style="white-space:pre-wrap">${esc(n.body.length > 220 ? n.body.slice(0, 220) + '…' : n.body)}</div>
         ${n.media.length ? `<div class="news-media compact">${n.media.map((m) => `<figure>${UA.mediaHtml([m], { compact: true }).replace(/^<div[^>]*>|<\/div>$/g, '')}<button class="btn sm bad" data-act="nmdel" data-id="${m.id}">حذف</button></figure>`).join('')}</div>` : ''}
         <div class="inline-form" style="margin-top:8px"><label>إضافة ملف<input type="file" id="nm-f-${n.id}" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><button class="btn sm" data-act="nmup" data-id="${n.id}">رفع</button><button class="btn sm" data-act="nmlink" data-id="${n.id}">إضافة رابط</button></div></article>`).join('') : '<div class="empty">لا أخبار بعد. ما تنشره يظهر لكل الطلاب في تطبيقهم.</div>'}</section></div>`;
   }
