@@ -74,6 +74,18 @@ test('تدفق كامل: تقديم، اعتماد، إصدار وثيقة، ت�
   // الوثيقة تحوي لقطة العلامات
   const doc = await api('GET', `/api/documents/${code}`, { cookie: stu });
   assert.equal(doc.json.document.payload.transcript.average, 90);
+  // الكشف الجديد: حقول الطالب والملخص والشعار ونموذج العرض
+  const tp = doc.json.document.payload;
+  assert.ok(['faculty', 'programName', 'years', 'enrollYear', 'status'].every((k) => k in tp.student));
+  assert.equal(tp.transcript.summary.courses, 1); assert.equal(tp.transcript.summary.failed, 0);
+  assert.ok(tp.transcript.grades[0].academicYear !== undefined && 'previous' in tp.transcript.grades[0]);
+  assert.ok('logo' in doc.json.document);
+  assert.equal((await api('GET', '/api/me', { cookie: staff })).json.transcriptTemplate, 'classic');
+  assert.equal((await api('PUT', '/api/transcript-template', { cookie: stu, body: { template: 'royal' } })).status, 403);
+  assert.equal((await api('PUT', '/api/transcript-template', { cookie: await loginAs('admin'), body: { template: 'nope' } })).status, 400);
+  const sv = await api('PUT', '/api/transcript-template', { cookie: await loginAs('admin'), body: { template: 'royal' } });
+  assert.equal(sv.status, 200);
+  assert.equal((await api('GET', '/api/me', { cookie: stu })).json.transcriptTemplate, 'royal');
   // QR
   const qr = await api('GET', `/api/documents/${code}/qr.svg`, { cookie: stu });
   assert.match(qr.text, /<svg/);

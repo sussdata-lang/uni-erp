@@ -65,7 +65,7 @@ createRequest({ db, cfg }, sU, { service: 'campus_life', details: { kind: 'ال�
 const rows = db.prepare('SELECT s.user_id FROM student_profiles s ORDER BY s.user_id').all();
 const students = rows.map((r) => getStudent({ db }, r.user_id));
 const requests = listRequests({ db }, staff, {});
-const docs = Object.fromEntries(db.prepare('SELECT code FROM documents').all().map((d) => [d.code, getDocument({ db }, staff, d.code)]));
+const docs = Object.fromEntries(db.prepare('SELECT code FROM documents').all().map((d) => [d.code, getDocument({ db, cfg: { publicDir: path.join(root, 'public') } }, staff, d.code)]));
 const services = db.prepare('SELECT * FROM service_types WHERE enabled = 1').all()
   .map((s) => ({ code: s.code, label: s.label, description: s.description, slaHours: s.sla_hours, requiresAttachment: !!s.requires_attachment, issuesDocument: !!s.issues_document, fields: JSON.parse(s.fields_json) }));
 const gradesRaw = db.prepare('SELECT g.*, c.instructor FROM grades g LEFT JOIN courses c ON c.id = g.course_id').all();
@@ -86,11 +86,12 @@ const data = JSON.stringify(state).replace(/</g, '\\u003c');
 const crestUri = 'data:image/svg+xml;base64,' + fs.readFileSync(path.join(root, 'public/brand/crest.svg')).toString('base64');   // الملف المستقل لا يرى /brand/ فيُضمَّن الشعار
 // الشعار يُضمَّن مرة واحدة فقط (حجمه كبير): متغير CSS + متغير JS تقرؤه القوالب
 const css = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8').replaceAll('url("/brand/crest.svg")', 'var(--crest-url)');
-const js = ['app.js', 'icons.js', 'staff.js', 'student.js', 'import.js', 'dashboard.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replaceAll('src="/brand/crest.svg"', 'src="${window.__CREST}"').replace(/<\/script/gi, '<\\/script'));
+const trCss = fs.readFileSync(path.join(root, 'public/transcript.css'), 'utf8').replace(/url\(\/fonts\/([^)]+)\)/g, (_, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(root, 'public/fonts', f)).toString('base64')})`);
+const js = ['app.js', 'icons.js', 'transcript.js', 'staff.js', 'student.js', 'import.js', 'dashboard.js', 'boot.js'].map((f) => fs.readFileSync(path.join(root, 'public', f), 'utf8').replaceAll('src="/brand/crest.svg"', 'src="${window.__CREST}"').replace(/<\/script/gi, '<\\/script'));
 let html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
-  .replace('<link rel="stylesheet" href="/style.css">', `<style>${css}\n.demo-bar{background:#fff4d6;color:#5b4300;font-size:13px;padding:6px 12px;border-bottom:1px solid #e7cf8a;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center}.demo-bar button{font:inherit;border:1px solid #c9a94e;background:#fff;color:#5b4300;border-radius:999px;padding:2px 12px;cursor:pointer}.demo-bar button[aria-pressed=true]{background:#5b4300;color:#fff}</style>`)
+  .replace('<link rel="stylesheet" href="/style.css">', `<style>${css}\n${trCss}\n.demo-bar{background:#fff4d6;color:#5b4300;font-size:13px;padding:6px 12px;border-bottom:1px solid #e7cf8a;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center}.demo-bar button{font:inherit;border:1px solid #c9a94e;background:#fff;color:#5b4300;border-radius:999px;padding:2px 12px;cursor:pointer}.demo-bar button[aria-pressed=true]{background:#5b4300;color:#fff}</style>`)
   .replace(/<script src="\/[a-z]+\.js" defer><\/script>\s*/g, '')
-  .replace('</body>', () => `<script>window.__CREST='${crestUri}';document.documentElement.style.setProperty('--crest-url','url('+window.__CREST+')');window.__DEMO__=${data};</script>\n<script>${qr}\n${shim}</script>\n${js.map((c) => `<script>${c}</script>`).join('\n')}\n</body>`);
+  .replace('</body>', () => `<script>window.__CREST='${crestUri}';window.TR_CREST=window.__CREST;document.documentElement.style.setProperty('--crest-url','url('+window.__CREST+')');window.__DEMO__=${data};</script>\n<script>${qr}\n${shim}</script>\n${js.map((c) => `<script>${c}</script>`).join('\n')}\n</body>`);
 fs.mkdirSync(path.join(root, 'demo'), { recursive: true });
 fs.rmSync(path.join(root, 'demo/registration-demo.html'), { force: true });
 fs.writeFileSync(path.join(root, 'demo/university-portal-demo.html'), html);

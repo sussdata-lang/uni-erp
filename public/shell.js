@@ -125,12 +125,12 @@
     const rows = reqs.slice(0, 6).map((r) => {
       const m = { review: ['amber', 'قيد المراجعة'], approved: ['green', 'معتمد'], rejected: ['red', 'مرفوض'] }[r.status] || ['amber', r.status];
       return `<tr><td><div class="sx-sc"><span>${esc(initials(r.student.name))}</span><div><strong>${esc(r.student.name)}</strong><small>${esc(r.student.studentNo || r.no)}</small></div></div></td>
-        <td>${esc(r.service.label)}</td><td class="sx-muted">${ago(r.createdAt)}</td><td><span class="sx-st ${m[0]}"><i></i>${m[1]}</span></td>
+        <td data-l="نوع الطلب">${esc(r.service.label)}</td><td class="sx-muted" data-l="وقت التقديم">${ago(r.createdAt)}</td><td data-l="الحالة"><span class="sx-st ${m[0]}"><i></i>${m[1]}</span></td>
         <td><button class="sx-go" data-sx="openreq" data-id="${r.id}" aria-label="عرض طلب ${esc(r.student.name)}">${ico('chevron', 17)}</button></td></tr>`;
     }).join('');
     const reqPanel = D.requests ? `<article class="sx-panel"><div class="sx-ph"><div><h2>أحدث الطلبات</h2><p>آخر المعاملات الواردة إلى النظام</p></div>
         <button class="sx-link" data-sx="go" data-v="affairs">عرض جميع الطلبات ${ico('arrow', 16)}</button></div>
-      <div class="sx-tscroll">${rows ? `<table class="sx-table"><thead><tr><th>الطالب</th><th>نوع الطلب</th><th>وقت التقديم</th><th>الحالة</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="sx-empty">لا توجد طلبات حتى الآن.</div>'}</div></article>`
+      <div class="sx-tscroll">${rows ? `<table class="sx-table rsp"><thead><tr><th>الطالب</th><th>نوع الطلب</th><th>وقت التقديم</th><th>الحالة</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="sx-empty">لا توجد طلبات حتى الآن.</div>'}</div></article>`
       : '';
 
     const views = new Set(UA.viewsFor(S.me.role).map((v) => v[0]));

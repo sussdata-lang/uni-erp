@@ -80,7 +80,7 @@
   async function route(method, url, body) {
     const u = new URL(url, 'http://x'), path = u.pathname, q = u.searchParams;
     const m = (re) => path.match(re);
-    if (path === '/api/me') return { user: window.__demoLoggedOut ? null : D.users[role] };
+    if (path === '/api/me') return { user: window.__demoLoggedOut ? null : D.users[role], transcriptTemplate: window.__trTpl || 'classic' };
     if (path === '/api/auth/login') { const n = String(body.username || '').toLowerCase(); role = /staff|admin|موظف/.test(n) ? 'staff' : 'student'; window.__demoLoggedOut = false; return { user: D.users[role] }; }
     if (path === '/api/auth/logout') { window.__demoLoggedOut = true; return { ok: true }; }
     if (path === '/api/auth/change-password') return { ok: true };
@@ -94,6 +94,7 @@
     let x = m(/^\/api\/news\/(\d+)$/); if (x && method === 'DELETE') { staffOnly(); st.news = st.news.filter((n) => n.id !== Number(x[1])); return { ok: true }; }
 
     /* الملف الشخصي والعلامات (الطالب) */
+    if (path === '/api/transcript-template' && method === 'PUT') { window.__trTpl = body.template; return { transcriptTemplate: body.template }; }
     if (path === '/api/me/profile' && method === 'GET') { const s = JSON.parse(JSON.stringify(me())); delete s.profile.notes; return { profile: s }; }
     if (path === '/api/me/profile' && method === 'PUT') {
       const s = me(), p = s.profile;
@@ -109,6 +110,7 @@
       if (role === 'student') { const s = me(); l = l.filter((c) => c.programId === s.program.id && c.active); const lv = Number(q.get('level')) || s.level; l = l.filter((c) => c.level === lv); }
       else { if (q.get('program')) l = l.filter((c) => c.programId === Number(q.get('program'))); if (q.get('level')) l = l.filter((c) => c.level === Number(q.get('level'))); }
       if (q.get('semester')) l = l.filter((c) => c.semester === Number(q.get('semester')));
+      if (role !== 'student') l = l.map((c) => { const g = prog(c.programId) || {}; return { ...c, faculty: g.faculty, facultyId: g.facultyId, facultyCode: g.facultyCode, program: g.name, years: g.years, grades: st.grades.filter((x) => x.course_id === c.id).length }; });
       return { courses: l.slice().sort((a, b) => a.level - b.level || a.semester - b.semester || a.name.localeCompare(b.name, 'ar')), level: q.get('level') ? Number(q.get('level')) : (role === 'student' ? (Number(q.get('level')) || me().level) : null) };
     }
     if (path === '/api/courses' && method === 'POST') {
@@ -133,6 +135,21 @@
       if (ex) { ex.theory_mark = th; ex.practical_mark = pr; ex.mark = th + (pr || 0); }
       else st.grades.push({ id: nextId(st.grades), student_id: sid, term: `${ay}-${c.semester === 1 ? 'الفصل الأول' : 'الفصل الثاني'}`, course: c.name, hours: c.hours, mark: th + (pr || 0), course_id: c.id, level: c.level, semester: c.semester, academic_year: ay, theory_mark: th, practical_mark: pr, instructor: c.instructor });
       return gradesFor(sid, null);
+    }
+
+    /* جدول العلامات الكامل (تصفية وترتيب وصفحات) */
+    if (path === '/api/grades' && method === 'GET') {
+      staffOnly(); const nq = (v) => String(v || '').replace(/[\u064B-\u065F\u0640]/g, '').trim().toLowerCase(), term = nq(q.get('q'));
+      let rows = st.grades.map((g) => { const u = st.students.find((k) => k.id === g.student_id) || {}, p = u.program || {}, c = st.courses.find((k) => k.id === g.course_id) || {};
+        return { id: g.id, studentId: g.student_id, studentNo: u.studentNo || '', studentName: u.name || '', faculty: p.faculty || '—', facultyId: p.facultyId || null, programId: p.id || null, program: p.name || '—', courseId: g.course_id, course: g.course, code: c.code || null, level: g.level, semester: g.semester, academicYear: g.academic_year, theory: g.theory_mark, practical: g.practical_mark, total: g.mark, passed: g.mark >= 60, enteredAt: g.entered_at || g.id }; });
+      if (term) rows = rows.filter((r) => [r.studentNo, r.studentName, r.faculty, r.program, r.course, r.code].some((x) => nq(x).includes(term)));
+      if (q.get('faculty')) rows = rows.filter((r) => String(r.facultyId) === q.get('faculty')); if (q.get('level')) rows = rows.filter((r) => String(r.level) === q.get('level')); if (q.get('semester')) rows = rows.filter((r) => String(r.semester) === q.get('semester'));
+      if (q.get('year')) rows = rows.filter((r) => r.academicYear === q.get('year')); if (q.get('status')) rows = rows.filter((r) => r.passed === (q.get('status') === 'pass'));
+      const sk = { studentNo: 'studentNo', studentName: 'studentName', faculty: 'faculty', course: 'course', level: 'level', academicYear: 'academicYear', total: 'total', theory: 'theory', practical: 'practical', status: 'total', enteredAt: 'enteredAt' }[q.get('sort')] || 'enteredAt', dir = q.get('dir') === 'asc' ? 1 : -1;
+      rows.sort((a, b) => ((typeof a[sk] === 'number' ? a[sk] - b[sk] : String(a[sk] ?? '').localeCompare(String(b[sk] ?? ''), 'ar')) * dir) || b.id - a.id);
+      const size = Math.min(100, Math.max(5, Number(q.get('size')) || 25)), pages = Math.max(1, Math.ceil(rows.length / size)), page = Math.min(pages, Math.max(1, Number(q.get('page')) || 1)), n = rows.length;
+      return { total: n, page, pages, size, options: { faculties: st.programs.filter((p) => p.facultyId).map((p) => ({ id: p.facultyId, name: p.faculty })).filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i), years: [...new Set(st.grades.map((g) => g.academic_year).filter(Boolean))].sort().reverse() },
+        summary: { count: n, students: new Set(rows.map((r) => r.studentId)).size, average: n ? Math.round((rows.reduce((a, r) => a + r.total, 0) / n) * 10) / 10 : null, passRate: n ? Math.round((rows.filter((r) => r.passed).length / n) * 1000) / 10 : null }, rows: rows.slice((page - 1) * size, page * size) };
     }
 
     /* الشكاوى */

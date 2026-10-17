@@ -301,11 +301,18 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const p = d.payload, st = p.student, who = `<b>${esc(st.name)}</b> (الرقم الجامعي ${esc(st.studentNo)})`;
     let body = '';
     if (p.service.code === 'attendance') body = `<p>تشهد ${esc(p.university)} بأن الطالب/ـة ${who} مقيَّد/ـة في برنامج «${esc(st.program)}»، وهو/هي على رأس دراسته/ا حتى تاريخ إصدار هذه الإفادة.</p><p>أُعطيت هذه الإفادة بناءً على طلبه/ا لتقديمها إلى: ${esc(p.details.purpose)}.</p>`;
+    if (p.service.code === 'transcript' && UA.transcript) return UA.transcript.render(d, S.trTpl || S.trDefault || 'classic');
     if (p.service.code === 'transcript') body = `<p>كشف علامات الطالب/ـة ${who}:</p><table><thead><tr><th>المقرر</th><th>الفصل</th><th>الساعات</th><th>العلامة</th></tr></thead><tbody>${p.transcript.grades.map((g) => `<tr><td>${esc(g.course)}</td><td>${esc(g.term)}</td><td>${g.hours}</td><td>${g.mark}</td></tr>`).join('')}</tbody></table><p style="margin-bottom:0">المعدل المرجَّح: ${p.transcript.average ?? '-'} من 100.</p>`;
     if (p.service.code === 'excellence_year') body = `<p>تشهد ${esc(p.university)} بأنه تقرر قبول تسجيل الطالب/ـة ${who}، المقيَّد/ـة في برنامج «${esc(st.program)}»، في سنة الامتياز للعام الدراسي ${esc(p.details.academic_year)}.</p>${p.details.notes ? `<p>ملاحظات: ${esc(p.details.notes)}</p>` : ''}`;
     if (p.service.code === 'excuse') body = `<p>بعد مراجعة المرفقات والتحقق من استيفائها للمدة النظامية، تقرر قبول العذر المقدَّم من الطالب/ـة ${who} عن امتحان مقرر «${esc(p.details.course)}» بتاريخ ${esc(p.details.exam_date)} (السبب: ${esc(p.details.reason)})، وتحديد موعد امتحان بديل.</p>`;
     return `<div class="doc"><div class="doc-head"><img class="crest" src="/brand/crest.svg" alt=""><h2>${esc(p.university)}</h2></div><div class="sub">قسم شؤون الطلاب · ${esc(p.service.label)}</div><hr>${body}
       <div class="doc-foot"><div><span class="stamp">موقّعة رقمياً</span><div style="margin-top:8px">رقم الطلب: <span class="mono">${esc(p.requestNo)}</span></div><div>تاريخ الإصدار: ${fmt(p.issuedAt)}</div><div>رمز التحقق: <span class="mono">${esc(d.code)}</span></div><div>البصمة: <span class="mono">${esc(d.hash.slice(0, 20))}…</span></div></div><div class="qr"><img alt="رمز QR للتحقق" src="/api/documents/${encodeURIComponent(d.code)}/qr.svg"></div></div></div>`;
+  }
+
+  function showDoc() {
+    const doc = S.docCur, tr = doc.payload.service.code === 'transcript' && UA.transcript, cur = S.trTpl || S.trDefault || 'classic';
+    const sw = tr ? `<div class="tr-sw no-print">${UA.transcript.templates.map((t) => `<button class="chip${t.id === cur ? ' on' : ''}" data-act="trtpl" data-t="${t.id}" title="${esc(t.desc)}">${esc(t.name)}${t.id === S.trDefault ? ' ✓' : ''}</button>`).join('')}${can('program:manage') && cur !== S.trDefault ? '<button class="btn" data-act="trdef">اعتماد كنموذج افتراضي</button>' : ''}</div>` : '';
+    $('#layer').innerHTML = `<div class="overlay" dir="rtl" data-act="close"><div class="sheet${tr ? ' sheet-tr' : ''}"><div class="sheet-bar no-print"><button class="btn" data-act="close">إغلاق</button><span><button class="btn" data-act="docpdf" data-c="${esc(doc.code)}">حفظ كملف PDF</button> <button class="btn" data-act="docprint">طباعة</button> <button class="btn pri" data-act="copy" data-c="${esc(doc.code)}">نسخ رمز التحقق</button></span></div>${sw}${docHtml(doc)}</div></div>`;
   }
 
   /* ---------- العرض والأحداث ---------- */
@@ -314,7 +321,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const app = $('#app');
     document.body.classList.remove('sx-on', 'sx-drawer');
     // واجهة الجوال (شريط سفلي وبطاقات) تُعرض فقط للطالب على شاشة صغيرة؛ على الحاسوب تُعرض واجهة سطح المكتب لكل الأدوار
-    document.body.classList.toggle('is-m', !!(S.me && S.me.role === 'student' && !S.me.mustChange && UA.isMobile()));
+    document.body.classList.remove('is-m');                       // لا شريط سفلي: الجوال يستخدم القائمة الجانبية نفسها
     if (!S.me && S.view !== 'verify') { app.innerHTML = loginView() + siteFoot(); return; }
     if (S.me && S.me.mustChange) { app.innerHTML = mustChangeView(); return; }
     if (S.me && S.me.role === 'student') { app.innerHTML = UA.studentShell(); return; }
@@ -420,10 +427,16 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (a === 'approve') { await api('POST', `/api/requests/${d.id}/approve`, {}); await loadFor('affairs'); render(); toast('تم الاعتماد وإصدار الوثيقة'); }
       else if (a === 'rejform') { S.rej = Number(d.id); render(); }
       else if (a === 'reject') { await api('POST', `/api/requests/${d.id}/reject`, { reason: val('rej-text') }); S.rej = null; await loadFor('affairs'); render(); toast('تم رفض الطلب'); }
-      else if (a === 'doc') {
-        const r = await api('GET', '/api/documents/' + encodeURIComponent(d.c));
-        $('#layer').innerHTML = `<div class="overlay" dir="rtl" data-act="close"><div class="sheet"><div class="sheet-bar"><button class="btn" data-act="close">إغلاق</button><button class="btn pri" data-act="copy" data-c="${esc(d.c)}">نسخ رمز التحقق</button></div>${docHtml(r.document)}</div></div>`;
+      else if (a === 'doc') { S.docCur = (await api('GET', '/api/documents/' + encodeURIComponent(d.c))).document; S.trTpl = null; showDoc(); }
+      else if (a === 'trtpl') { S.trTpl = d.t; showDoc(); }
+      else if (a === 'trdef') { await api('PUT', '/api/transcript-template', { template: S.trTpl || S.trDefault }); S.trDefault = S.trTpl || S.trDefault; showDoc(); toast('اعتُمد هذا النموذج لكل كشوف العلامات'); }
+      else if (a === 'docpdf') {                                   // حفظ الوثيقة المعتمدة كملف PDF موقَّع رقمياً
+        const res = await fetch('/api/documents/' + encodeURIComponent(d.c) + '/pdf', { credentials: 'same-origin' });
+        if (!res.ok) { toast('تعذّر تحميل ملف الوثيقة.'); return; }
+        const al = document.createElement('a'); al.href = URL.createObjectURL(await res.blob()); al.download = `${d.c}.pdf`; al.click();
+        setTimeout(() => URL.revokeObjectURL(al.href), 4000); toast('تم حفظ الوثيقة كملف PDF');
       }
+      else if (a === 'docprint') { document.body.classList.add('print-doc'); window.addEventListener('afterprint', () => document.body.classList.remove('print-doc'), { once: true }); window.print(); }
       else if (a === 'copy') { try { await navigator.clipboard.writeText(d.c); toast('تم نسخ الرمز'); } catch { toast('الرمز: ' + d.c); } }
       else if (a === 'atab') { S.adminTab = d.t; S.edit = null; render(); }
       else if (a === 'addhold') { await api('POST', '/api/admin/holds', { studentNo: val('h-no'), holdType: val('h-type'), note: val('h-note') }); await loadFor('admin'); render(); toast('سُجّلت العقوبة'); }
@@ -500,7 +513,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   /* ---------- الإقلاع ---------- */
   UA.start = async function start() {
     const params = new URLSearchParams(location.search), code = params.get('verify');
-    try { const r = await api('GET', '/api/me'); S.uni = r.university ?? S.uni; if (r.user) await afterLogin(r.user); } catch { S.me = null; }
+    try { const r = await api('GET', '/api/me'); S.uni = r.university ?? S.uni; S.trDefault = r.transcriptTemplate || 'classic'; if (r.user) await afterLogin(r.user); } catch { S.me = null; }
     if (code) { S.view = 'verify'; await doVerify(code); history.replaceState(null, '', location.pathname); }
     render();
   };
