@@ -27,13 +27,14 @@
     cap: '<path d="m2 9 10-5 10 5-10 5Z"/><path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    scan: '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8 9v6M11 9v6M14 9v6M17 9v6"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
     out: '<path d="M15 4.5h4.5v15H15"/><path d="M10.5 8l-4 4 4 4M6.5 12h10"/>',
   };
   const ico = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[n] || ''}</svg>`;
-  const NAV_ICON = { overview: 'grid', home: 'grid', guide: 'book', grades: 'chart', tx: 'file', affairs: 'users', dashboard: 'chart', academics: 'book', comms: 'news', import: 'upload', export: 'download', admin: 'settings', access: 'shield', audit: 'file', verify: 'check' };
-  const PARENT = { site: 'admin', services: 'admin' };
+  const NAV_ICON = { overview: 'grid', home: 'grid', guide: 'book', grades: 'chart', tx: 'file', affairs: 'users', dashboard: 'chart', academics: 'book', comms: 'news', import: 'upload', export: 'download', attendance: 'scan', admin: 'settings', access: 'shield', audit: 'file', verify: 'check' };
+  const PARENT = { site: 'admin', services: 'admin', academics: 'affairs' };
   const EXTRA_LABEL = { site: 'إعدادات الموقع', services: 'الخدمات' };
 
   /* ---------- أدوات ---------- */
@@ -164,7 +165,18 @@
       if (o.badges) return o.badges[k] ? `<small>${o.badges[k]}</small>` : '';
       return k === 'affairs' && review ? `<small>${review}</small>` : (k === 'comms' && comp && comp.value ? `<small>${comp.value}</small>` : '');
     };
-    const nav = views.map((v) => `<button data-act="${act}" data-v="${v[0]}"${activeKey === v[0] ? ' aria-current="page"' : ''}>${ico(NAV_ICON[v[0]] || 'file')}<span>${esc(v[1])}</span>${badge(v[0])}</button>`).join('');
+    const hasGroup = !o.views && views.some((v) => v[0] === 'affairs');
+    const inGroup = hasGroup && (S.view === 'affairs' || S.view === 'academics');
+    const subs = () => {
+      const t = S.stTab === 'edit' ? 'list' : S.stTab;
+      const it = [['affairs', 'requests', can('request:decide') ? 'سجل الطلبات' : 'الطلبات']];
+      if (can('student:read')) it.push(['affairs', 'list', 'سجل الطلاب']);
+      if (can('student:register')) it.push(['affairs', 'new', 'تسجيل طالب جديد']);
+      if (views.some((v) => v[0] === 'academics')) it.push(['academics', 'courses', 'دليل المواد'], ['academics', 'grades', 'جدول العلامات']);
+      const at = UA.acTab ? UA.acTab() : '';
+      return `<div class="sx-sub-list" role="group" aria-label="شؤون الطلاب">${it.map((x) => `<button data-sx="sub" data-v="${x[0]}" data-t="${x[1]}"${S.view === x[0] && (x[0] === 'affairs' ? t === x[1] : at === x[1]) ? ' aria-current="true"' : ''}>${esc(x[2])}</button>`).join('')}</div>`;
+    };
+    const nav = views.filter((v) => !(hasGroup && v[0] === 'academics')).map((v) => `<button data-act="${act}" data-v="${v[0]}"${activeKey === v[0] || (hasGroup && v[0] === 'affairs' && inGroup) ? ' aria-current="page"' : ''}>${ico(NAV_ICON[v[0]] || 'file')}<span>${esc(v[1])}</span>${badge(v[0])}${hasGroup && v[0] === 'affairs' ? `<em class="sx-caret${inGroup ? ' open' : ''}">${ico('chevron', 15)}</em>` : ''}</button>${hasGroup && v[0] === 'affairs' && inGroup ? subs() : ''}`).join('');
     const uni = String(S.uni || ''), cut = uni.indexOf(' للعلوم');
     const brand1 = cut > 0 ? uni.slice(0, cut) : uni, brand2 = cut > 0 ? uni.slice(cut + 1) : 'نظام إدارة الجامعة';
     const role = S.me.roleLabel || UA.ROLE_LABEL[S.me.role] || '';
@@ -188,7 +200,7 @@
           ${search}
           <div class="sx-actions">
             <div class="sx-wrap"><button class="sx-ib" data-sx="notif" aria-label="الإشعارات">${ico('bell')}${review ? '<i class="sx-dot"></i>' : ''}</button>
-              <div class="sx-pop" id="sx-notif" hidden><strong>الإشعارات</strong>${notifBody}</div></div>
+              <div class="sx-pop" id="sx-notif" hidden><strong>الإشعارات</strong>${notifBody}${UA.push ? UA.push.panel() : ''}</div></div>
             <div class="sx-sep"></div>
             <div class="sx-wrap"><button class="sx-profile" data-sx="profile" aria-label="قائمة المستخدم"><span class="sx-av">${esc(initials(S.me.name))}</span><span><strong>${esc(S.me.name)}</strong><small>${esc(role)}</small></span>${ico('chevron', 15)}</button>
               <div class="sx-pop" id="sx-menu" hidden>${menu}</div></div>
@@ -209,6 +221,12 @@
     if (a === 'open') document.body.classList.add('sx-drawer');
     else if (a === 'close') document.body.classList.remove('sx-drawer');
     else if (a === 'notif' || a === 'profile') { const mine = document.getElementById(a === 'notif' ? 'sx-notif' : 'sx-menu'); const was = mine && !mine.hidden; pops().forEach((p) => { p.hidden = true; }); if (mine) mine.hidden = was; }
+    else if (a === 'sub') {
+      const v = t.dataset.v, tab = t.dataset.t;
+      if (v === 'affairs') { S.stTab = tab; S.err = ''; S.fieldErr = null; S.stEdit = null; if (tab === 'new') { S.cred = null; S.stSel = null; } await UA.guard(() => UA.go('affairs')); }
+      else { await UA.guard(() => UA.go('academics')); if (UA.actions.actab) await UA.actions.actab(null, { t: tab }); }
+      document.body.classList.remove('sx-drawer');
+    }
     else if (a === 'go') { await UA.guard(() => UA.go(t.dataset.v)); }
     else if (a === 'newstudent') { S.stTab = 'new'; S.stSel = null; await UA.guard(() => UA.go('affairs')); }
     else if (a === 'openreq') { S.stTab = 'requests'; S.sel = Number(t.dataset.id); S.rej = null; S.view = 'affairs'; await UA.guard(async () => { await UA.loadFor('affairs'); UA.render(); window.scrollTo(0, 0); }); }

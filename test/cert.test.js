@@ -100,8 +100,8 @@ test('الإصدار عند الطلب: طالب قديم بلا شهادة تُ
   const h = await hashPassword(PW, 1024);
   const prog = app.db.prepare('SELECT id FROM programs WHERE faculty_id = 2').get().id;
   const uid = Number(app.db.prepare("INSERT INTO users (username, display_name, password_hash, role, student_no, program, created_at) VALUES ('2023-0007','قديم',?, 'student','2023-0007','x',?)").run(h, Date.now()).lastInsertRowid);
-  app.db.prepare(`INSERT INTO student_profiles (user_id, first_name, father_name, last_name, mother_name, national_id, gender, birth_date, birth_place, nationality, phone, governorate, city, address, hs_type, hs_year, hs_score, hs_max, program_id, admission_type, enroll_year, enroll_term, study_level, guardian_name, guardian_relation, guardian_phone, status, created_at, updated_at)
-    VALUES (?, 'قديم','الأب','الطالب','الأم','11111111111','ذكر','2003-01-01','دمشق','سورية','0944000000','دمشق','المزة','x','x',2021,100,100,?,'x',2023,'الفصل الأول',3,'ولي','الأب','0933000000','active',?,?)`).run(uid, prog, Date.now(), Date.now());
+  app.db.prepare(`INSERT INTO student_profiles (user_id, first_name, father_name, last_name, mother_name, national_id, gender, birth_date, birth_place, nationality, phone, governorate, city, address, hs_type, hs_year, hs_score, program_id, admission_type, enroll_year, enroll_term, study_level, guardian_name, guardian_relation, guardian_phone, status, created_at, updated_at)
+    VALUES (?, 'قديم','الأب','الطالب','الأم','11111111111','ذكر','2003-01-01','دمشق','سورية','0944000000','دمشق','المزة','x','x',2021,100,?,'x',2023,'الفصل الأول',3,'ولي','الأب','0933000000','active',?,?)`).run(uid, prog, Date.now(), Date.now());
   assert.equal(certFor(app.db, uid), null);
   const r = await api('GET', `/api/students/${uid}/certificate.pdf`, { cookie: admin }); assert.equal(r.status, 200); assert.ok(verifyPdf(r.buf).intact);
   assert.ok(certFor(app.db, uid)); assert.equal((await api('GET', `/api/students/${uid}/certificate.pdf`, { cookie: admin })).buf.equals(r.buf), true);   // لا تُصدَر ثانيةً
@@ -143,6 +143,6 @@ test('الختم الزمني RFC 3161: يُدمج في التوقيع ويُت�
 
 function formFor(nid, first) {
   return { first_name: first, father_name: 'علي', last_name: 'الخطيب', mother_name: 'هدى', national_id: nid, gender: 'ذكر', birth_date: '2005-11-02', birth_place: 'حمص', nationality: 'سورية', phone: '0944000001', governorate: 'حمص', city: 'الوعر', address: 'شارع 1',
-    hs_type: 'الثانوية العامة - الفرع العلمي', hs_year: 2024, hs_score: 2000, hs_max: 2400, program_id: app.db.prepare("SELECT g.id FROM programs g JOIN faculties f ON f.id = g.faculty_id WHERE f.code = 'CSS'").get().id,
+    hs_type: 'الثانوية العامة - الفرع العلمي', hs_year: 2024, hs_score: 2000, program_id: app.db.prepare("SELECT g.id FROM programs g JOIN faculties f ON f.id = g.faculty_id WHERE f.code = 'CSS'").get().id,
     admission_type: 'القبول العام (المفاضلة)', enroll_year: 2026, enroll_term: 'الفصل الأول', study_level: 1, guardian_name: 'علي الخطيب', guardian_relation: 'الأب', guardian_phone: '0933000001' };
 }

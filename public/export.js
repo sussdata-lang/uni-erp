@@ -1,7 +1,7 @@
 /* صفحة تصدير البيانات: اختيار المجموعة (طلاب، مواد، علامات...) والمرشحات (كلية، برنامج، سنة، فصل، عام دراسي)، معاينة، وتنزيل بأكثر من صيغة */
 (function () {
   const UA = window.UA, { S, api, esc, toast } = UA;
-  const X = { opts: null, dataset: 'grades', f: { faculty: '', program: '', level: '', semester: '', academicYear: '', status: '', enrollYear: '' }, layout: 'single', data: null, busy: '', loading: false, err: '' };
+  const X = { opts: null, dataset: 'grades', f: { faculty: '', program: '', level: '', semester: '', academicYear: '', status: '', enrollYear: '', akind: '', ahall: '', acourse: '', astate: '', afrom: '', ato: '' }, layout: 'single', data: null, busy: '', loading: false, err: '' };
   const prevReset = UA.reset;
   UA.reset = () => { if (prevReset) prevReset(); Object.assign(X, { opts: null, data: null, busy: '', err: '' }); };
 
@@ -9,15 +9,15 @@
     students: ['faculty', 'program', 'level', 'status', 'enrollYear'],
     grades: ['faculty', 'program', 'level', 'semester', 'academicYear', 'status', 'enrollYear'],
     courses: ['faculty', 'program', 'level', 'semester'],
-    requests: ['faculty', 'program', 'level', 'status', 'enrollYear'], holds: ['faculty', 'program', 'level', 'status', 'enrollYear'], complaints: ['faculty', 'program', 'level', 'status', 'enrollYear'],
-    all: ['faculty', 'program', 'level', 'semester', 'academicYear', 'status', 'enrollYear'],
+    requests: ['faculty', 'program', 'level', 'status', 'enrollYear'], attendance: ['faculty', 'akind', 'ahall', 'acourse', 'astate', 'afrom', 'ato'], holds: ['faculty', 'program', 'level', 'status', 'enrollYear'], complaints: ['faculty', 'program', 'level', 'status', 'enrollYear'],
+    all: ['faculty', 'program', 'level', 'semester', 'academicYear', 'status', 'enrollYear', 'akind', 'ahall', 'acourse', 'astate', 'afrom', 'ato'],
   };
-  const DS_ICON = { students: 'students', grades: 'grades', courses: 'guide', requests: 'tx', holds: 'lock', complaints: 'help', all: 'export' };
+  const DS_ICON = { attendance: 'hall', students: 'students', grades: 'grades', courses: 'guide', requests: 'tx', holds: 'lock', complaints: 'help', all: 'export' };
   const FORMATS = [['xlsx', 'Excel', 'sheet'], ['csv', 'CSV', 'csv'], ['json', 'JSON', 'json'], ['docx', 'Word', 'word'], ['pdf', 'PDF', 'pdf']];
   const LV = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة'];
 
   const query = (extra = {}) => {
-    const q = new URLSearchParams({ dataset: X.dataset, ...extra });
+    const q = new URLSearchParams({ dataset: X.dataset, tz: new Date().getTimezoneOffset(), ...extra });
     for (const k of APPLIES[X.dataset]) if (X.f[k]) q.set(k, X.f[k]);
     return q;
   };
@@ -26,7 +26,7 @@
     try { X.data = await api('GET', '/api/export/preview?' + query(extra)); } catch (e) { if (!e.status) throw e; X.err = e.message; X.data = null; }
     X.loading = false;
   }
-  UA.loaders.export = async () => { if (!X.opts) X.opts = await api('GET', '/api/export/options'); await loadPreview(); };
+  UA.loaders.export = async () => { if (!X.opts) X.opts = await api('GET', '/api/export/options'); if (S.exportPreset) { X.dataset = S.exportPreset.dataset; Object.assign(X.f, S.exportPreset.f || {}); S.exportPreset = null; } await loadPreview(); };
 
   const sel = (key, label, options, all = 'الكل') => `<label>${label}<select data-chg="xfilter" data-k="${key}"><option value="">${all}</option>${options.map(([v, l]) => `<option value="${esc(v)}"${String(X.f[key]) === String(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
 
@@ -42,6 +42,12 @@
       ${on.has('academicYear') ? sel('academicYear', 'العام الدراسي', o.academicYears.map((y) => [y, y])) : ''}
       ${on.has('status') ? sel('status', 'حالة القيد', Object.entries(o.statuses)) : ''}
       ${on.has('enrollYear') ? sel('enrollYear', 'سنة القيد', o.enrollYears.map((y) => [y, y])) : ''}
+      ${on.has('akind') ? sel('akind', 'نوع سجل القاعات', Object.entries(o.hallKinds || {})) : ''}
+      ${on.has('ahall') ? sel('ahall', 'القاعة', (o.halls || []).map((h) => [h, h])) : ''}
+      ${on.has('acourse') ? sel('acourse', 'مادة سجل القاعات', (o.courses || []).map((c) => [c.id, c.name])) : ''}
+      ${on.has('astate') ? sel('astate', 'حالة الدخول', [['open', 'داخل القاعة'], ['closed', 'خرج']]) : ''}
+      ${on.has('afrom') ? `<label>سجل القاعات من تاريخ<input type="date" data-chg="xfilter" data-k="afrom" value="${esc(X.f.afrom)}"></label>` : ''}
+      ${on.has('ato') ? `<label>سجل القاعات إلى تاريخ<input type="date" data-chg="xfilter" data-k="ato" value="${esc(X.f.ato)}"></label>` : ''}
     </div>`;
   }
 
@@ -61,6 +67,7 @@
     return `<div class="xpage"><div class="print-head"><b>تصدير البيانات — الجامعة السورية للعلوم الأمنية</b><span>${esc(dsLabel)} · ${new Date().toLocaleDateString('ar-SY')}</span></div>
       <section class="card no-print"><h2>تصدير البيانات</h2><p class="hint" style="margin-top:0">اختر ما تريد تصديره، ضيّق بالمرشحات (السنة والفصل والبرنامج...)، ثم نزّله بالصيغة المناسبة. كل عملية تصدير تُسجَّل في سجل التدقيق.</p>
         <div class="xd-grid" role="group" aria-label="مجموعة البيانات">${dsCards}</div></section>
+      <section class="card no-print xall"><div><b>${UA.icon('backup', 20)} تصدير كل البيانات (Excel)</b><p class="small" style="margin:4px 0 0">ملف واحد بورقة لكل مجموعة (طلاب، مواد، علامات، طلبات، ذمم، شكاوى، سجل القاعات). احفظه خارج الخادم كنسخة إضافية؛ النسخة الاحتياطية الكاملة (قاعدة البيانات والمرفقات ومفتاح التوقيع) في «الإدارة ← النسخ الاحتياطي».</p></div><button class="btn pri" data-act="xall"${X.busy ? ' disabled' : ''}>${X.busy === 'all' ? 'جارٍ التجهيز…' : 'تنزيل الكل (xlsx)'}</button></section>
       <section class="card no-print"><h2>${UA.icon('filter', 20)} المرشحات</h2>${filters()}${layoutOpt}</section>
       <section class="card no-print xbar"><div class="xbar-t"><b>${total}</b> صف جاهز للتصدير</div><div class="xfmts">${fmts}</div>
         <p class="small" style="margin:0">PDF: تُفتح نافذة الطباعة (حتى 5000 صف) فاختر «حفظ كـ PDF».</p></section>
@@ -76,6 +83,11 @@
   }
 
   Object.assign(UA.actions, {
+    xall: async () => {
+      X.busy = 'all'; UA.render(); const keepD = X.dataset, keepF = { ...X.f };
+      try { X.dataset = 'all'; X.f = { faculty: '', program: '', level: '', semester: '', academicYear: '', status: '', enrollYear: '', akind: '', ahall: '', acourse: '', astate: '', afrom: '', ato: '' }; await download('xlsx'); toast('تم تصدير كل البيانات'); }
+      catch (e) { if (!e.status) throw e; toast(e.message); } finally { X.dataset = keepD; X.f = keepF; X.busy = ''; UA.render(); }
+    },
     xds: async (el, d) => { X.dataset = d.d; X.layout = 'single'; await loadPreview(); UA.render(); },
     xdl: async (el, d) => {
       X.busy = d.k; UA.render();

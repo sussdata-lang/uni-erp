@@ -1,13 +1,13 @@
-/* الاستيراد من Excel / CSV / SQL: طلاب، مقررات، علامات، وسجل دخول وخروج القاعات بالباركود. فحص بلا حفظ ثم اعتماد. */
+/* الاستيراد من Excel / CSV / SQL: طلاب، مقررات، علامات. فحص بلا حفظ ثم اعتماد. */
 (function () {
   const UA = window.UA, { S, api, esc, toast, can } = UA;
   const KINDS = [
     { k: 'students', perm: 'student:register', title: 'الطلاب', tpl: '/templates/students-template.xlsx', desc: 'أسماء الطلاب وبياناتهم الكاملة. يُولَّد لكل طالب اسم مستخدم بترميز الكلية (مثل CCS-2026-0001) وكلمة مرور مؤقتة تُسلَّم في ملف منفصل مرة واحدة.' },
     { k: 'courses', perm: 'course:manage', title: 'المقررات', tpl: '/templates/courses-template.xlsx', desc: 'مقررات الكليات والمعاهد (الجهة، السنة، الفصل، الاسم، الرمز، الساعات، المدرّس). المقرر الموجود يُحدَّث ولا يتكرر.' },
+    { k: 'attendance', perm: 'attendance:manage', title: 'سجل القاعات', tpl: '/templates/attendance-template.xlsx', desc: 'عمليات دخول وخروج الطلاب من القاعات (الرقم الجامعي، النوع، المادة أو الفحص، القاعة، وقت الدخول والخروج). لا يُقبل دخولان متداخلان لطالب واحد.' },
     { k: 'grades', perm: 'grade:manage', title: 'العلامات', tpl: '/templates/grades-template.xlsx', desc: 'علامات الطلاب (الرقم الجامعي، المقرر، العام الدراسي، النظري والعملي). استورد المقررات أولاً.' },
-    { k: 'attendance', perm: 'course:manage', title: 'سجل دخول وخروج القاعات (الباركود)', tpl: '/api/export/attendance?format=xlsx', desc: 'سجل حضور المحاضرات والامتحانات عبر الباركود (الباركود/الرقم الجامعي، المقرر، القاعة، نوع الجلسة، التاريخ، وقت الدخول والخروج).' },
   ];
-  const st = {};
+  const st = {};   // لكل نوع: { file, b64, name, res, busy }
   const prevReset = UA.reset; UA.reset = () => { if (prevReset) prevReset(); for (const k of Object.keys(st)) delete st[k]; };
 
   const b64 = async (file) => { const u = new Uint8Array(await file.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
@@ -34,7 +34,7 @@
     const ks = KINDS.filter((K) => can(K.perm));
     return `<section class="card"><h2>الاستيراد الجماعي</h2><p class="hint" style="margin-top:0">حمّل القالب، عبّئه، ثم ارفعه. تُفحص الصفوف أولاً دون حفظ، وتُعرض الأخطاء برقم الصف، ثم تعتمد الاستيراد. ملفات <b>SQL</b> تُقرأ منها جمل <span dir="ltr" class="mono">INSERT</span> فقط ولا يُنفَّذ أي أمر SQL.</p></section><div class="stack" style="margin-top:16px">${ks.map(card).join('')}</div>`;
   };
-  UA.loaders.import = async () => {};
+  UA.loaders.import = async () => { if (S.importPreset) { const el = document.getElementById('imp-f-' + S.importPreset); S.importPreset = null; if (el) el.scrollIntoView({ block: 'center' }); } };
 
   const run = async (K, commit) => {
     const s = st[K], inp = document.getElementById(`imp-f-${K}`), f = (inp && inp.files[0]) || null;

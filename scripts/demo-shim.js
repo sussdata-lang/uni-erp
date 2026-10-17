@@ -8,7 +8,7 @@
   const LV = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة', 'السابعة'];
   const err = (status, message, error, field) => ({ __err: true, status, body: { error: error || 'error', message, field } });
   const staffOnly = () => { if (role !== 'staff') throw err(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden'); };
-  const full = (p) => [p.first_name, p.father_name, p.grandfather_name, p.last_name].filter(Boolean).join(' ');
+  const full = (p) => [p.first_name, p.father_name, p.last_name].filter(Boolean).join(' ');
   const prog = (id) => st.programs.find((x) => x.id === Number(id));
   const tmpPw = () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 10; i++) s += a[Math.floor(Math.random() * a.length)]; return s + '7a'; };
   const maskCard = (s) => ({ id: s.id, studentNo: s.studentNo, name: s.name, status: s.status, statusLabel: s.statusLabel, program: s.program, level: s.level, levelLabel: s.levelLabel, enrollYear: s.enrollYear, phone: s.phone, nationalId: s.nationalId.length <= 4 ? s.nationalId : '•'.repeat(s.nationalId.length - 4) + s.nationalId.slice(-4) });
@@ -29,12 +29,11 @@
       p[f.name] = v;
     }
     if (!p.status) p.status = 'active';
-    if (p.hs_score > p.hs_max) throw err(400, 'مجموع الطالب لا يتجاوز المجموع الأعلى للشهادة.', 'validation', 'hs_score');
     const o = st.students.find((s) => s.profile.national_id === p.national_id && s.id !== id);
     if (o) throw err(409, `الرقم الوطني مسجَّل مسبقاً للطالب ذي الرقم الجامعي ${o.studentNo}.`, 'duplicate', 'national_id');
     const g = prog(p.program_id), t = now();
     return { id, studentNo: no, name: full(p), status: p.status, statusLabel: D.options.statuses[p.status], program: { id: g.id, faculty: g.faculty, name: g.name, degree: g.degree }, level: p.study_level, levelLabel: 'السنة ' + LV[p.study_level - 1],
-      enrollYear: p.enroll_year, phone: p.phone, nationalId: p.national_id, profile: p, username: no, mustChangePassword: !prev, hsPercent: p.hs_max ? Math.round((p.hs_score / p.hs_max) * 1000) / 10 : null,
+      enrollYear: p.enroll_year, phone: p.phone, nationalId: p.national_id, profile: p, username: no, mustChangePassword: !prev,
       createdAt: prev ? prev.createdAt : t, updatedAt: t, activeHolds: 0 };
   }
 

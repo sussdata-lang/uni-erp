@@ -178,3 +178,16 @@
   .c-rib{position:fixed;top:0;bottom:0;right:0;height:100vh}.trp-c .c-body{margin-right:3.4em}.trp-c .trp-pg{display:block}
   .trp-b .b-head{-webkit-print-color-adjust:exact}
 }
+
+/* ===== حالات جديدة: لم تُرصد، سنة فارغة، ملخص المواد ===== */
+.trp .na{color:var(--mu)} .trp tr.pend td{color:#6b7a75;background:rgba(201,162,75,.06)} .trp tr.pend .c-nm{font-style:italic}
+.trp-empty{margin:.4em 0;text-align:center;color:var(--mu);font-size:.9em;padding:.5em;border:.07em dashed var(--ln);background:rgba(255,255,255,.6)}
+.trp-ys{margin:1em 0;font-family:'TRCairo';font-size:.92em;border:.1em solid var(--g)}
+.trp-ys caption{caption-side:top;text-align:right;font-weight:800;color:var(--g);padding:.2em 0 .35em;font-size:1.05em}
+.trp-ys th{background:var(--g);color:#fff;padding:.35em .4em;font-size:.85em;font-weight:700}
+.trp-ys td{padding:.32em .4em;text-align:center;border-top:.07em solid var(--ln)} .trp-ys td:first-child{text-align:right;font-weight:600}
+.trp-ys tfoot td{background:rgba(201,162,75,.22);font-weight:800;color:var(--gd);border-top:.1em solid var(--g)}
+.ys-d{border-color:var(--au)} .ys-d th{color:var(--au2)} .ys-b{border:0;border-radius:.8em;overflow:hidden;box-shadow:0 .1em .6em rgba(3,46,40,.08);background:#fff}
+.b-ysw{margin:1.2em 2.2em}.b-ysw .trp-ys{margin:0}
+.ys-c{border-radius:.5em;overflow:hidden}
+@container (max-width:520px){.b-ysw{margin:1em .9em}.trp-ys{font-size:.85em}.trp-ys th:nth-child(5),.trp-ys td:nth-child(5){display:none}}

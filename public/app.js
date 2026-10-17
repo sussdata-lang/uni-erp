@@ -55,8 +55,9 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     if (can('course:manage') || can('grade:manage')) v.push(['academics', 'المواد والعلامات']);
     if (can('news:manage') || can('complaint:manage')) v.push(['comms', 'الأخبار والشكاوى']);
     if (can('student:register') || can('course:manage') || can('grade:manage')) v.push(['import', 'الاستيراد']);
+    if (can('attendance:manage')) v.push(['attendance', 'سجل القاعات']);
     if (can('data:export')) v.push(['export', 'التصدير']);
-    if (can('holds:manage') || can('rules:manage') || can('program:manage')) v.push(['admin', 'الإدارة']);
+    if (can('holds:manage') || can('rules:manage') || can('program:manage') || can('backup:manage')) v.push(['admin', 'الإدارة']);
     if (can('user:manage') || can('role:manage')) v.push(['access', 'الحسابات والصلاحيات']);
     if (can('audit:read')) v.push(['audit', 'التدقيق']);
     return [...v, ['verify', 'التحقق العام']];
@@ -164,10 +165,11 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
 
   function adminView() {
-    const tabs = [['holds', 'اللجنة التأديبية', can('holds:manage')], ['rules', 'قواعد الفحص الآلي', can('rules:manage')], ['programs', 'الكليات والبرامج', can('program:manage')]].filter((t) => t[2]);
+    const tabs = [['holds', 'اللجنة التأديبية', can('holds:manage')], ['rules', 'قواعد الفحص الآلي', can('rules:manage')], ['programs', 'الكليات والبرامج', can('program:manage')], ['backup', 'النسخ الاحتياطي', can('backup:manage')]].filter((t) => t[2]);
     if (!tabs.some((t) => t[0] === S.adminTab)) S.adminTab = tabs[0] ? tabs[0][0] : 'holds';
     const bar = `<div class="sub-tabs">${tabs.map((t) => `<button class="chip" data-act="atab" data-t="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}</button>`).join('')}</div>`;
     const a = S.admin;
+    if (S.adminTab === 'backup') return bar + UA.backupView();
     if (S.adminTab === 'holds') {
       return bar + `<section class="card"><h2>تسجيل عقوبة على طالب</h2><div class="inline-form"><label>الرقم الجامعي<input id="h-no" placeholder="CSS-2026-0001" dir="ltr"></label>
         <label>النوع<select id="h-type"><option value="financial">مالية</option><option value="disciplinary">تأديبية</option><option value="library">مكتبة</option></select></label><label>ملاحظة<input id="h-note" maxlength="200"></label><button class="btn pri" data-act="addhold">تسجيل</button></div></section>
@@ -223,16 +225,39 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     else ctl = `<input id="${id}" type="text" maxlength="${f.max ?? 100}" value="${esc(val0)}"${req}${inv}>`;
     return `<label class="${f.wide ? 'wide' : ''}"><span>${esc(f.label)}${f.required ? ' <i class="req-m" aria-hidden="true">*</i>' : ''}</span>${ctl}${f.hint ? `<span class="small">${esc(f.hint)}</span>` : ''}</label>`;
   }
+  /* مرفقات الطالب: الثبوتيات الشخصية، الصورة الشخصية، مرفقات أخرى (تُرفع بعد حفظ الملف) */
+  const ATT = [['identity', 'الثبوتيات الشخصية', 'idcard', 'هوية أو جواز أو دفتر عائلة أو شهادة الثانوية (صور أو PDF، حتى 5 ملفات، 8 ميغابايت للملف).', true],
+    ['photo', 'الصورة الشخصية', 'photo', 'صورة واضحة بخلفية سادة (jpg أو png أو webp، حتى 3 ميغابايت). تحلّ الجديدة محل القديمة.', false],
+    ['other', 'مرفقات أخرى', 'clip', 'أي وثائق داعمة أخرى (صور أو PDF، حتى 10 ملفات).', true]];
+  const fsize = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' م.ب' : Math.max(1, Math.round(n / 1024)) + ' ك.ب');
+  function filesList(files, kind, canDel) {
+    const l = (files || []).filter((f) => f.kind === kind);
+    return l.length ? `<ul class="att-list">${l.map((f) => `<li>${f.mime.startsWith('image/') ? `<a href="${f.url}" target="_blank" rel="noopener"><img class="att-th" alt="" src="${f.url}"></a>` : ''}<a href="${f.url}" target="_blank" rel="noopener">${esc(f.name)}</a> <span class="small">${fsize(f.size)}</span>${canDel ? ` <button type="button" class="btn sm bad" data-act="stfdel" data-id="${f.id}">حذف</button>` : ''}</li>`).join('')}</ul>` : '';
+  }
+  function attachmentsSection(n, edit) {
+    const rows = ATT.map(([k, title, ic, hint, multi]) => `<div class="att"><span class="att-ic" aria-hidden="true">${UA.icon(ic, 30)}</span><div class="att-b"><b>${title}</b><span class="small">${hint}</span>
+      ${edit ? filesList(S.stFiles, k, true) : ''}<input type="file" id="att-${k}"${multi ? ' multiple' : ''} accept="${k === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,image/gif,application/pdf'}"></div></div>`).join('');
+    return `<fieldset class="sec"><legend><span class="n">${n}</span>المرفقات</legend><div class="att-grid">${rows}</div><p class="small" style="margin:8px 0 0">المرفقات اختيارية، وتُرفع بعد حفظ بيانات الطالب. يمكن إضافتها أو حذفها لاحقاً من «تعديل».</p></fieldset>`;
+  }
+  async function uploadAttachments(studentId) {
+    const fails = []; let n = 0;
+    for (const [k] of ATT) {
+      const inp = document.getElementById('att-' + k); if (!inp || !inp.files) continue;
+      for (const f of inp.files) { try { await upload(`/api/students/${studentId}/files?kind=${k}&name=${encodeURIComponent(f.name)}`, f); n++; } catch (e) { if (!e.status) throw e; fails.push(`${f.name}: ${e.message}`); } }
+    }
+    return { n, fails };
+  }
   function studentForm(values, edit) {
     const secs = S.reg.sections.map((sec, i) => `<fieldset class="sec"><legend><span class="n">${i + 1}</span>${esc(sec.title)}</legend><div class="fgrid">${sec.fields.filter((f) => edit || !f.editOnly).map((f) => fieldHtml(f, values[f.name])).join('')}</div></fieldset>`).join('');
-    return `<form id="regform" class="regform" novalidate-off>${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}${secs}
+    const attSec = attachmentsSection(S.reg.sections.length + 1, edit);
+    return `<form id="regform" class="regform" novalidate-off>${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}${secs}${attSec}
       <div class="actions sticky-actions"><button class="btn pri" type="submit">${edit ? 'حفظ التعديلات' : 'تسجيل الطالب'}</button><button class="btn" type="button" data-act="${edit ? 'stcancel' : 'stclear'}">${edit ? 'إلغاء' : 'تفريغ النموذج'}</button>
       <span class="small" style="align-self:center">الحقول المعلَّمة بـ <i class="req-m">*</i> إلزامية. يُولَّد الرقم الجامعي وكلمة المرور المؤقتة تلقائياً.</span></div></form>`;
   }
   function credCard() {
     const c = S.cred; if (!c) return '';
     return `<section class="card cred" id="credcard"><h2>تم تسجيل الطالب</h2><p class="hint" style="margin-top:0"><b>${esc(c.name)}</b> — سلِّم هذه البيانات للطالب الآن. كلمة المرور المؤقتة تُعرض مرة واحدة فقط، وسيُطلب منه تغييرها عند أول دخول.</p>
-      <dl class="kv big"><dt>الرقم الجامعي (اسم المستخدم)</dt><dd class="mono" dir="ltr">${esc(c.username)}</dd><dt>كلمة المرور المؤقتة</dt><dd class="mono" dir="ltr">${esc(c.tempPassword)}</dd></dl>
+      ${c.att && (c.att.n || c.att.fails.length) ? `<p class="hint">رُفع ${c.att.n} مرفق${c.att.fails.length ? ` — تعذّر رفع: ${esc(c.att.fails.join(' | '))} (أضِفها من «تعديل»)` : ''}.</p>` : ''}<dl class="kv big"><dt>الرقم الجامعي (اسم المستخدم)</dt><dd class="mono" dir="ltr">${esc(c.username)}</dd><dt>كلمة المرور المؤقتة</dt><dd class="mono" dir="ltr">${esc(c.tempPassword)}</dd></dl>
       <div class="actions no-print"><button class="btn pri" data-act="credcopy">نسخ</button><button class="btn" data-act="credprint">طباعة</button><button class="btn" data-act="credopen">فتح ملف الطالب</button><button class="btn" data-act="crednew">تسجيل طالب آخر</button></div></section>`;
   }
   function studentsView() {
@@ -240,6 +265,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     const bar = '';
     if (S.stTab === 'new') return bar + (S.cred ? credCard() : `<section class="card"><h2>تسجيل طالب جديد</h2>${studentForm(S.newVals || {}, false)}</section>`);
     if (S.stTab === 'edit' && S.stEdit) return bar + `<section class="card"><h2>تعديل ملف: ${esc(S.stEdit.name)} <span class="mono small">${esc(S.stEdit.studentNo)}</span></h2>${studentForm(S.stEdit.profile, true)}</section>`;
+    if (UA.studentsTable) return bar + UA.studentsTable.view(studentDetail);
     const L = S.stList, progOpts = S.reg.sections.flatMap((x) => x.fields).find((f) => f.name === 'program_id').options;
     const rows = L.students.map((st) => `<tr class="row" tabindex="0" data-act="stsel" data-id="${st.id}" aria-selected="${S.stSel && S.stSel.id === st.id}"><td class="mono">${esc(st.studentNo)}</td><td>${esc(st.name)}</td><td class="hint">${esc(st.program.label || st.program.name)} · ${esc(st.levelLabel)}</td><td>${spill(st.status, st.statusLabel)}</td></tr>`).join('');
     return bar + `<div class="grid2"><section class="card"><h2>سجل الطلاب <span class="small">(${L.total})</span></h2>
@@ -259,18 +285,22 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       if (f.name === 'program_id') return kvrow('الكلية والبرنامج', st.program.label);
       if (f.name === 'study_level') return kvrow(lab('study_level'), st.levelLabel);
       return kvrow(lab(f.name), p[f.name]);
-    }).join('')}${sec.id === 'certificate' && st.hsPercent !== null ? kvrow('النسبة المئوية', st.hsPercent + '%') : ''}</dl>`).join('');
+    }).join('')}</dl>`).join('');
   }
   function relatedRequests(st) {
     const rs = (S.requests || []).filter((r) => r.student && r.student.studentNo === st.studentNo);
     if (!rs.length) return '';
     return `<h3 class="sec-h">طلبات الطالب</h3><ul class="mini-list">${rs.map((r) => `<li><button class="link" data-act="reqopen" data-id="${r.id}">${esc(r.service.label)} · <span class="mono">${esc(r.no)}</span></button> ${pill(r)}</li>`).join('')}</ul>`;
   }
+  function attDetail() {
+    const f = S.stFiles || []; if (!f.length) return '<h3 class="sec-h">المرفقات</h3><p class="small">لا مرفقات.</p>';
+    return '<h3 class="sec-h">المرفقات</h3>' + ATT.map(([k, t]) => { const l = filesList(f, k, false); return l ? `<b class="small">${t}</b>${l}` : ''; }).join('');
+  }
   function studentDetail(st) {
     return `<div class="me"><div class="avatar">${esc(st.name[0])}</div><div><b>${esc(st.name)}</b><small class="mono">${esc(st.studentNo)}</small></div></div>
       <div style="margin:8px 0">${spill(st.status, st.statusLabel)} ${st.activeHolds ? `<span class="pill p-rejected">${st.activeHolds} عقوبة قائمة</span>` : ''}</div>
       <div class="actions no-print"><button class="btn pri sm" data-act="stedit">تعديل</button><button class="btn sm" data-act="stpw">إعادة تعيين كلمة المرور</button><button class="btn sm" data-act="stcert">شهادة التسجيل الموقَّعة (PDF)</button>${can('student:delete') ? '<button class="btn sm bad" data-act="stdel">حذف الطالب</button>' : ''}</div>${S.stCert ? `<p class="small">رمز التحقق <span class="mono" dir="ltr">${esc(S.stCert.code)}</span> · ${S.stCert.tsaStatus === 'rfc3161' ? 'ختم زمني موثوق' : S.stCert.tsaStatus === 'failed' ? 'تعذّر الختم الموثوق' : 'ختم زمني محلي'} · بصمة <span class="mono" dir="ltr">${esc(S.stCert.pdfSha256.slice(0, 16))}…</span>${S.stCert.selfSigned ? ' · شهادة ذاتية' : ''}</p>` : ''}
-      ${relatedRequests(st)}${profileKv(st)}<p class="small">سُجِّل ${fmt(st.createdAt)} · آخر تعديل ${fmt(st.updatedAt)}</p>`;
+      ${UA.code128 ? `<div class="bc-card" id="bccard"><b>${esc(st.name)}</b><div class="bc-box">${UA.code128(st.studentNo)}</div><span class="mono" dir="ltr">${esc(st.studentNo)}</span><button class="btn sm no-print" data-act="bcprint">طباعة بطاقة الباركود</button></div>` : ''}${relatedRequests(st)}${profileKv(st)}${attDetail()}<p class="small">سُجِّل ${fmt(st.createdAt)} · آخر تعديل ${fmt(st.updatedAt)}</p>`;
   }
   function auditView() {
     const c = S.chain;
@@ -341,11 +371,12 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       } else if (view === 'admin') {
         const g = (perm, url, key) => (can(perm) ? api('GET', url).then((x) => x[key]) : Promise.resolve([]));
         const [holds, rules, pg, fc] = await Promise.all([g('holds:manage', '/api/admin/holds', 'holds'), g('rules:manage', '/api/admin/rules', 'rules'), g('program:manage', '/api/programs', 'programs'), g('program:manage', '/api/faculties', 'faculties')]);
-        S.admin = { holds, rules, programs: pg, faculties: fc };
+        S.admin = { holds, rules, programs: pg, faculties: fc, backup: can('backup:manage') ? await api('GET', '/api/admin/backups') : null };
       } else if (view === 'audit') S.audit = (await api('GET', '/api/audit?limit=100')).entries;
     } catch (e) { if (e.status !== 401) toast(e.message); }
   }
   async function loadStudents() {
+    if (UA.studentsTable) { await UA.studentsTable.load(); return; }
     const L = S.stList, p = new URLSearchParams();
     if (L.q) p.set('q', L.q); if (L.program) p.set('program', L.program); if (L.status) p.set('status', L.status);
     const r = await api('GET', '/api/students?' + p);
@@ -397,10 +428,12 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
         try {
           if (edit) {
             const r = await api('PUT', '/api/students/' + S.stEdit.id, body);
+            const up = await uploadAttachments(S.stEdit.id); if (up.fails.length) toast('تعذّر رفع: ' + up.fails.join(' | '));
             S.stSel = r.student; S.stTab = 'list'; S.stEdit = null; S.err = ''; S.fieldErr = null; await loadStudents(); render(); toast('حُفظت التعديلات');
           } else {
             const r = await api('POST', '/api/students', body);
-            S.cred = { ...r.credentials, name: r.student.name, id: r.student.id }; S.newVals = {}; S.err = ''; S.fieldErr = null; render(); window.scrollTo(0, 0);
+            const up = await uploadAttachments(r.student.id);
+            S.cred = { ...r.credentials, name: r.student.name, id: r.student.id, att: up }; S.newVals = {}; S.err = ''; S.fieldErr = null; render(); window.scrollTo(0, 0);
           }
         } catch (err) {
           if (!err.status) throw err;
@@ -431,12 +464,14 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (a === 'trtpl') { S.trTpl = d.t; showDoc(); }
       else if (a === 'trdef') { await api('PUT', '/api/transcript-template', { template: S.trTpl || S.trDefault }); S.trDefault = S.trTpl || S.trDefault; showDoc(); toast('اعتُمد هذا النموذج لكل كشوف العلامات'); }
       else if (a === 'docpdf') {                                   // حفظ الوثيقة المعتمدة كملف PDF موقَّع رقمياً
-        const res = await fetch('/api/documents/' + encodeURIComponent(d.c) + '/pdf', { credentials: 'same-origin' });
+        const tpl = S.docCur && S.docCur.code === d.c && S.docCur.payload.service.code === 'transcript' ? '?template=' + encodeURIComponent(S.trTpl || S.trDefault || 'classic') : '';
+        const res = await fetch('/api/documents/' + encodeURIComponent(d.c) + '/pdf' + tpl, { credentials: 'same-origin' });
         if (!res.ok) { toast('تعذّر تحميل ملف الوثيقة.'); return; }
         const al = document.createElement('a'); al.href = URL.createObjectURL(await res.blob()); al.download = `${d.c}.pdf`; al.click();
         setTimeout(() => URL.revokeObjectURL(al.href), 4000); toast('تم حفظ الوثيقة كملف PDF');
       }
       else if (a === 'docprint') { document.body.classList.add('print-doc'); window.addEventListener('afterprint', () => document.body.classList.remove('print-doc'), { once: true }); window.print(); }
+      else if (a === 'bcprint') { document.body.classList.add('print-bc'); window.addEventListener('afterprint', () => document.body.classList.remove('print-bc'), { once: true }); window.print(); }
       else if (a === 'copy') { try { await navigator.clipboard.writeText(d.c); toast('تم نسخ الرمز'); } catch { toast('الرمز: ' + d.c); } }
       else if (a === 'atab') { S.adminTab = d.t; S.edit = null; render(); }
       else if (a === 'addhold') { await api('POST', '/api/admin/holds', { studentNo: val('h-no'), holdType: val('h-type'), note: val('h-note') }); await loadFor('admin'); render(); toast('سُجّلت العقوبة'); }
@@ -476,13 +511,14 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
         await api('DELETE', '/api/students/' + st.id); S.stSel = null; S.stCert = null; await loadFor('affairs'); render(); toast('حُذف الطالب');
       }
       else if (a === 'sttab') { S.stTab = d.t; S.err = ''; S.fieldErr = null; S.stEdit = null; if (d.t === 'list') await loadStudents(); render(); }
-      else if (a === 'stsel') { const r = await api('GET', '/api/students/' + d.id); S.stSel = r.student; S.stCert = r.certificate; render(); }
+      else if (a === 'stsel') { const r = await api('GET', '/api/students/' + d.id); S.stSel = r.student; S.stCert = r.certificate; S.stFiles = (await api('GET', `/api/students/${d.id}/files`)).files; render(); }
       else if (a === 'stcert') {
         const res = await fetch(`/api/students/${S.stSel.id}/certificate.pdf`, { credentials: 'same-origin' });
         if (!res.ok) { let m = 'تعذّر إصدار الشهادة.'; try { m = (await res.json()).message || m; } catch { /* */ } toast(m); return; }
         const al = document.createElement('a'); al.href = URL.createObjectURL(await res.blob()); al.download = `enrollment-${S.stSel.studentNo}.pdf`; al.click(); setTimeout(() => URL.revokeObjectURL(al.href), 4000);
         S.stCert = (await api('GET', '/api/students/' + S.stSel.id)).certificate; render();
       }
+      else if (a === 'stfdel') { if (!confirm('حذف هذا المرفق نهائياً؟')) return; await api('DELETE', '/api/student-files/' + d.id); S.stFiles = (await api('GET', `/api/students/${(S.stEdit || S.stSel).id}/files`)).files; render(); toast('حُذف المرفق'); }
       else if (a === 'stedit') { S.stEdit = S.stSel; S.stTab = 'edit'; S.err = ''; S.fieldErr = null; render(); window.scrollTo(0, 0); }
       else if (a === 'stcancel') { S.stTab = 'list'; S.stEdit = null; S.err = ''; S.fieldErr = null; render(); }
       else if (a === 'stclear') { S.newVals = {}; S.err = ''; S.fieldErr = null; render(); }
@@ -501,7 +537,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (a === 'addprog') { await api('POST', '/api/admin/programs', { facultyId: Number(val('pg-fac')), name: val('pg-name'), degree: val('pg-deg'), years: Number(val('pg-years')) }); S.reg = null; await loadFor('admin'); render(); toast('أُضيف البرنامج'); }
       else if (a === 'progtoggle') { await api('POST', `/api/admin/programs/${d.id}/toggle`, { enabled: d.on === '1' }); S.reg = null; await loadFor('admin'); render(); }
       else if (a === 'reqopen') { S.stTab = 'requests'; S.sel = Number(d.id); S.rej = null; render(); window.scrollTo(0, 0); }
-      else if (a === 'openstud') { S.stSel = (await api('GET', '/api/students/' + d.id)).student; S.stTab = 'list'; render(); window.scrollTo(0, 0); }
+      else if (a === 'openstud') { S.stSel = (await api('GET', '/api/students/' + d.id)).student; S.stFiles = (await api('GET', `/api/students/${d.id}/files`)).files; S.stTab = 'list'; render(); window.scrollTo(0, 0); }
       else if (a === 'chain') { S.chain = await api('GET', '/api/audit/verify'); render(); }
     });
   });

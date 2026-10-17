@@ -77,8 +77,8 @@ test('الطلاب: الاعتماد يسجّل الصحيح بترميز الك
 const NAMES = ['سعد', 'ماهر', 'نادر', 'باسل', 'وائل', 'ياسر'];
 test('الطلاب من ملف SQL (أعمدة إنكليزية) ومن CSV', async () => {
   const q = (s) => `'${s}'`;
-  const sql = `-- dump\nCREATE TABLE students (id int, first_name text);\nINSERT INTO \`students\` (first_name, father_name, last_name, mother_name, national_id, gender, birth_date, birth_place, nationality, phone, governorate, city, address, hs_type, hs_year, hs_score, hs_max, faculty, admission_type, enroll_year, enroll_term, study_level, guardian_name, guardian_relation, guardian_phone) VALUES\n` +
-    [1, 2].map((i) => `(${[NAMES[i], 'علي', 'الخطيب', 'هدى ' + NAMES[i], '3000000000' + i, 'ذكر', '14/03/2005', 'حمص', 'سورية', '944000000' + i, 'حمص', 'الوعر', 'شارع 1', fx('students-filled.xlsx') && 'الثانوية العامة - الفرع العلمي', '2024', '2000', '2400', 'TICS', 'القبول العام (المفاضلة)', '2026', 'الفصل الأول', '1', 'علي الخطيب', 'الأب', '933000000' + i].map((v) => q(v)).join(',')})`).join(',\n') + ';\nDROP TABLE x;';
+  const sql = `-- dump\nCREATE TABLE students (id int, first_name text);\nINSERT INTO \`students\` (first_name, father_name, last_name, mother_name, national_id, gender, birth_date, birth_place, nationality, phone, governorate, city, address, hs_type, hs_year, hs_score, faculty, admission_type, enroll_year, enroll_term, study_level, guardian_name, guardian_relation, guardian_phone) VALUES\n` +
+    [1, 2].map((i) => `(${[NAMES[i], 'علي', 'الخطيب', 'هدى ' + NAMES[i], '3000000000' + i, 'ذكر', '14/03/2005', 'حمص', 'سورية', '944000000' + i, 'حمص', 'الوعر', 'شارع 1', fx('students-filled.xlsx') && 'الثانوية العامة - الفرع العلمي', '2024', '2000', 'TICS', 'القبول العام (المفاضلة)', '2026', 'الفصل الأول', '1', 'علي الخطيب', 'الأب', '933000000' + i].map((v) => q(v)).join(',')})`).join(',\n') + ';\nDROP TABLE x;';
   const r = await up('students', 'dump.sql', Buffer.from(sql), false);
   assert.equal(r.status, 200, r.text);
   if (r.json.valid !== 2) console.log(JSON.stringify(r.json.errors));

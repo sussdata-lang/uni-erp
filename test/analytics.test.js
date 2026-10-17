@@ -27,6 +27,7 @@ test.before(async () => {
   app = createApp({ dbPath: path.join(dir, 't.db'), uploadDir: path.join(dir, 'up'), scryptN: 1024, port: 0 });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${app.server.address().port}`;
+  app.db.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('grades_workflow', 'off')").run();   // هذه الاختبارات لا تخص مراحل الاعتماد
   const h = await hashPassword(PW, 1024);
   for (const [u, role] of [['admin', 'admin'], ['staff', 'staff'], ['auditor', 'auditor']]) app.db.prepare('INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (?,?,?,?,?)').run(u, u, h, role, Date.now());
   admin = await loginAs('admin'); staff = await loginAs('staff'); auditor = await loginAs('auditor');

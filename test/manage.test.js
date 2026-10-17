@@ -24,7 +24,7 @@ async function loginAs(username) {
 const form = (o = {}) => ({
   first_name: 'ليلى', father_name: 'أحمد', last_name: 'الحسن', mother_name: 'سعاد الخطيب', national_id: '01234567890', gender: 'أنثى', birth_date: '2006-03-14',
   birth_place: 'دمشق', nationality: 'سورية', phone: '0944123456', governorate: 'دمشق', city: 'المزة', address: 'شارع الجلاء',
-  hs_type: 'الثانوية العامة - الفرع العلمي', hs_year: 2024, hs_score: 2100, hs_max: 2400, program_id: 2, admission_type: 'القبول العام (المفاضلة)',
+  hs_type: 'الثانوية العامة - الفرع العلمي', hs_year: 2024, hs_score: 2100, program_id: 2, admission_type: 'القبول العام (المفاضلة)',
   enroll_year: 2024, enroll_term: 'الفصل الأول', study_level: 2, guardian_name: 'أحمد الحسن', guardian_relation: 'الأب', guardian_phone: '0933111222', ...o,
 });
 

@@ -1,6 +1,7 @@
 // يبني demo/transcript-templates.html: معرض مستقل للنماذج الأربعة ببيانات وهمية (خطوط وشعار مضمَّنة، يعمل دون خادم).
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { qrSvg } from '../server/qr.js';
+import { buildView } from '../server/services/transcriptmodel.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), pub = path.join(root, 'public');
 const rd = (f) => fs.readFileSync(path.join(pub, f));
 let css = rd('transcript.css').toString().replace(/url\(\/fonts\/([^)]+)\)/g, (_, f) => `url(data:font/woff2;base64,${rd('fonts/' + f).toString('base64')})`);
@@ -13,11 +14,13 @@ const grades = [
   c('نظم التشغيل', 'CS201', 4, 40, 41, 76, 2, 1, '2024/2025'), c('التشفير التطبيقي', 'CYB201', 3, 45, 38, 87, 2, 1, '2024/2025'), c('قواعد البيانات', 'CS203', 3, 44, 40, 81, 2, 1, '2024/2025'), c('أمن الشبكات', 'CYB202', 3, 47, 40, 94, 2, 1, '2024/2025'),
   c('الاستجابة للحوادث', 'CYB210', 3, 41, 36, 72, 2, 2, '2024/2025'), c('اختبار الاختراق', 'CYB220', 4, 38, 46, 89, 2, 2, '2024/2025'), c('هندسة البرمجيات', 'CS210', 3, 43, 39, 83, 2, 2, '2024/2025'), c('القانون الرقمي', 'LAW201', 2, 66, null, 92, 2, 2, '2024/2025'),
 ];
-const cur = grades.filter((g) => !g.previous), H = cur.reduce((s, g) => s + g.hours, 0);
+for (const [n, code, h, sem] of [['الأمن السحابي', 'CYB301', 3, 1], ['التحليل الجنائي الرقمي', 'CYB310', 3, 1], ['مشروع التخرج 1', 'CYB399', 4, 2]]) grades.push({ course: n, code, hours: h, theory: null, practical: null, mark: null, level: 3, semester: sem, academicYear: null, previous: false, pending: true, term: '' });
+const cur = grades.filter((g) => !g.previous && !g.pending), H = cur.reduce((s, g) => s + g.hours, 0);
 const doc = { code: 'DEMO-7QK2-M9XA', hash: 'a3f9c2d17be4408f9d62e1c07755ab3c91fe20d84b6a1c33', logo: crest,
   payload: { university: 'الجامعة السورية للعلوم الأمنية', requestNo: 'REQ-2026-000417', issuedAt: '2026-10-15T09:30:00Z',
     student: { name: 'سارة أحمد العلي', studentNo: '2023-04817', faculty: 'كلية الأمن السيبراني', facultyCode: 'CYB', programName: 'الأمن السيبراني', degree: 'الإجازة', years: 4, level: 3, enrollYear: 2023, status: 'active' },
     transcript: { grades, average: cur.reduce((s, g) => s + g.hours * g.mark, 0) / H, summary: { courses: cur.length, passed: cur.length, failed: 0, hours: H, earnedHours: H } } } };
+doc.view = buildView(doc.payload);
 const js = rd('transcript.js').toString();
 const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>نماذج كشف العلامات</title><style>${css}
 body{margin:0;background:#e9efed;font-family:'TRCairo',sans-serif;color:#14211e}

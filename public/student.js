@@ -43,7 +43,7 @@
     if (T.loading.guide || !T.courses) body = sk(6);
     else if (!T.courses.length) body = empty('لا توجد مقررات مسجَّلة لهذه السنة بعد', 'تُضاف المقررات من قسم شؤون الطلاب.');
     else body = T.courses.map((c) => `<article class="m-card"><b>${esc(c.name)} - ${SEM_LABEL[c.semester]}</b><small>${esc(c.instructor || 'المدرّس غير محدد')}</small></article>`).join('');
-    return pageHead('دليل المواد') + levelChips('glvl', lv) + semSelect('gsem', T.guide.sem) + `<div class="m-list">${body}</div>`;
+    return pageHead('دليل المواد') + confBanner() + levelChips('glvl', lv) + semSelect('gsem', T.guide.sem) + `<div class="m-list">${body}</div>`;
   }
   function gradeCard(g) {
     const open = T.gr.open[g.id], badge = g.passed ? `<span class="m-badge ok">${IC.check}ناجح</span>` : `<span class="m-badge bad">${IC.cross}راسب</span>`;
@@ -118,13 +118,14 @@
     const snippet = String(n.body || '').replace(/\s+/g, ' ').slice(0, 130);
     return `<button class="sx-newsc" data-act="newsopen" data-id="${n.id}"><small>${esc(day(n.publishedAt))}${n.pinned ? ' · مثبّت' : ''}</small><strong>${esc(n.title)}</strong><span>${esc(snippet)}${String(n.body || '').length > 130 ? '…' : ''}</span></button>`;
   }
+  const confBanner = () => (T.conf && T.conf.conflicts.length ? `<div class="reason" role="alert" style="margin:10px 0"><b>تنبيه: تعارض في جدول محاضراتك</b><br>${T.conf.conflicts.map((c) => `${esc(c.dayLabel)}: «${esc(c.a.course)}» (${c.a.start}–${c.a.end}) و«${esc(c.b.course)}» (${c.b.start}–${c.b.end})`).join('<br>')}<br><small>راجع قسم شؤون الطلاب لتعديل الجدول.</small></div>` : '');
   function guideD() {
     const lv = T.guide.level || curLevel();
     let body;
     if (T.loading.guide || !T.courses) body = sxWait();
     else if (!T.courses.length) body = sxEmpty('لا توجد مقررات مسجَّلة لهذه السنة بعد', 'تُضاف المقررات من قسم شؤون الطلاب.');
     else body = `<table class="sx-table rsp"><thead><tr><th>المقرر</th><th>الفصل</th><th>المدرّس</th><th>الساعات</th></tr></thead><tbody>${T.courses.map((c) => `<tr><td><strong>${esc(c.name)}</strong>${c.code ? `<div class="sx-sub">${esc(c.code)}</div>` : ''}</td><td data-l="الفصل">${SEM_LABEL[c.semester] || ''}</td><td class="sx-muted" data-l="المدرّس">${esc(c.instructor || 'غير محدد')}</td><td data-l="الساعات">${dash(c.hours)}</td></tr>`).join('')}</tbody></table>`;
-    return sxHead('دليل المواد', 'مقررات برنامجك الدراسي حسب السنة والفصل.') + `<article class="sx-panel"><div class="sx-bar">${sxTabs('glvl', lv)}${sxSem('gsem', T.guide.sem)}</div><div class="sx-tscroll">${body}</div></article>`;
+    return sxHead('دليل المواد', 'مقررات برنامجك الدراسي حسب السنة والفصل.') + confBanner() + `<article class="sx-panel"><div class="sx-bar">${sxTabs('glvl', lv)}${sxSem('gsem', T.guide.sem)}</div><div class="sx-tscroll">${body}</div></article>`;
   }
   function gradesD() {
     const lv = T.gr.level || curLevel();
@@ -198,7 +199,7 @@
       gs.filter(Boolean).forEach((r) => r.grades.forEach((g) => { count++; if (g.passed) passed++; hrs += g.hours || 0; sum += (g.hours || 0) * g.total; }));
       T.all = { count, passed, failed: count - passed, avg: hrs ? Math.round((sum / hrs) * 10) / 10 : null };
     },
-    guide: async () => { await ensureProfile(); const lv = T.guide.level || curLevel(); T.courses = (await api('GET', `/api/courses?level=${lv}${T.guide.sem ? '&semester=' + T.guide.sem : ''}`)).courses; },
+    guide: async () => { await ensureProfile(); const lv = T.guide.level || curLevel(); T.courses = (await api('GET', `/api/courses?level=${lv}${T.guide.sem ? '&semester=' + T.guide.sem : ''}`)).courses; try { T.conf = await api('GET', `/api/students/${UA.S.me.id}/schedule-conflicts`); } catch (e) { T.conf = null; } },
     grades: async () => {
       await ensureProfile(); let lv = T.gr.level || curLevel(); T.grades = await api('GET', '/api/me/grades?level=' + lv);
       if (!T.gr.level) {   // إن لم تصدر علامات السنة الحالية بعد يُعرض آخر عام فيه علامات
@@ -225,7 +226,7 @@
   function fieldHtml(f, v) {
     const id = 'wz-' + f.name, req = f.required ? ' required' : '', cur = v ?? f.default ?? '';
     let c;
-    if (f.type === 'select') c = `<select id="${id}"${req}><option value="">— اختر —</option>${f.options.map((o) => `<option${o === cur ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+    if (f.type === 'select') c = `<select id="${id}"${req}><option value="">— اختر —</option>${f.options.map((o) => `<option value="${esc(o)}"${o === cur ? ' selected' : ''}>${esc(o.replace(/\s*\[#\d+\]$/, ''))}</option>`).join('')}</select>`;
     else if (f.type === 'number') c = `<input id="${id}" type="number" min="${f.min ?? 0}" max="${f.max ?? 99}" value="${esc(cur)}"${req}>`;
     else if (f.type === 'date') c = `<input id="${id}" type="date" value="${esc(cur)}"${req}>`;
     else c = `<input id="${id}" type="text" maxlength="200" value="${esc(cur)}"${req}>`;
@@ -244,7 +245,7 @@
         ${s.requiresAttachment ? `<label>المرفق (PDF أو صورة، حتى 2 ميغابايت) <i class="req-m">*</i><input id="wz-file" type="file" accept=".pdf,.png,.jpg,.jpeg"${w.file ? '' : ' required'}>${w.file ? `<span class="small">المرفق الحالي: ${esc(w.file.name)}</span>` : ''}</label>` : ''}
         ${w.err ? `<div class="err" role="alert">${esc(w.err)}</div>` : ''}<button class="m-btn" type="submit">التالي</button></form>`, { back: 'wzback', foot: '<span>الخطوة 2/3</span>' });
     } else {
-      const s = svcOf(), rows = s.fields.filter((f) => w.vals[f.name] !== '' && w.vals[f.name] !== undefined).map((f) => `<dt>${esc(f.label)}</dt><dd>${esc(w.vals[f.name])}</dd>`).join('');
+      const s = svcOf(), rows = s.fields.filter((f) => w.vals[f.name] !== '' && w.vals[f.name] !== undefined).map((f) => `<dt>${esc(f.label)}</dt><dd>${esc(String(w.vals[f.name]).replace(/\s*\[#\d+\]$/, ''))}</dd>`).join('');
       sheet('مراجعة وتأكيد', `<div class="m-form"><p class="m-lead">راجع بيانات معاملتك قبل التقديم.</p><dl class="kv"><dt>نوع المعاملة</dt><dd>${esc(s.label)}</dd>${rows}${w.file ? `<dt>المرفق</dt><dd>${esc(w.file.name)}</dd>` : ''}</dl>
         <p class="hint">يُجرى فحص آلي فوري، ثم يراجعها الموظف خلال ${s.slaHours} ساعة تقريباً.</p>${w.err ? `<div class="err" role="alert">${esc(w.err)}</div>` : ''}
         <button class="m-btn" data-act="wzsubmit"${w.busy ? ' disabled' : ''}>${w.busy ? 'جارٍ التقديم…' : 'تأكيد وتقديم المعاملة'}</button></div>`, { back: 'wzback', foot: '<span>الخطوة 3/3</span>' });

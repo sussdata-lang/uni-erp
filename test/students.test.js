@@ -22,10 +22,10 @@ async function loginAs(username, password = PW) {
   return { cookie: r.headers.get('set-cookie').split(';')[0], user: r.json.user };
 }
 const form = (o = {}) => ({
-  first_name: 'ليلى', father_name: 'أحمد', grandfather_name: 'محمود', last_name: 'الحسن', mother_name: 'سعاد الخطيب', name_en: 'Layla Alhasan',
+  first_name: 'ليلى', father_name: 'أحمد', last_name: 'الحسن', mother_name: 'سعاد الخطيب', name_en: 'Layla Alhasan',
   national_id: '01234567890', gender: 'أنثى', birth_date: '2006-03-14', birth_place: 'دمشق', nationality: 'سورية', marital_status: 'عازب/عزباء',
   phone: '0944 123 456', email: 'Layla@Example.com', governorate: 'دمشق', city: 'المزة', address: 'شارع الجلاء، بناء 4',
-  hs_type: 'الثانوية العامة - الفرع العلمي', hs_year: 2024, hs_school: 'ثانوية الأمل', hs_governorate: 'دمشق', hs_score: 2100, hs_max: 2400,
+  hs_type: 'الثانوية العامة - الفرع العلمي', hs_year: 2024, hs_school: 'ثانوية الأمل', hs_governorate: 'دمشق', hs_score: 2100,
   program_id: 2, admission_type: 'القبول العام (المفاضلة)', enroll_year: 2024, enroll_term: 'الفصل الأول', study_level: 1,
   guardian_name: 'أحمد الحسن', guardian_relation: 'الأب', guardian_phone: '0933111222', notes: 'ملاحظة داخلية', ...o,
 });
@@ -50,7 +50,6 @@ test('التسجيل: ينشئ ملفاً كاملاً ورقماً جامعيا
   assert.equal(credentials.username, student.studentNo);
   assert.equal(student.profile.phone, '0944123456');          // تنظيف الفراغات
   assert.equal(student.profile.email, 'layla@example.com');
-  assert.equal(student.hsPercent, 87.5);
   assert.equal(student.profile.status, 'active');
   // أرقام متسلسلة داخل السنة نفسها
   const r2 = await api('POST', '/api/students', { cookie: staff, body: form({ national_id: '01234567891', first_name: 'سامر', mother_name: 'هدى' }) });
@@ -86,7 +85,7 @@ test('التحقق: يرفض النواقص والقيم غير المنطقية
   await bad({ gender: 'غير ذلك' }, 'gender');
   await bad({ birth_date: '2030-01-01' }, 'birth_date');
   await bad({ birth_date: '2006-02-31' }, 'birth_date');
-  await bad({ hs_score: 3000 }, 'hs_score');
+  await bad({ hs_score: -5 }, 'hs_score');
   await bad({ hs_year: 2030 }, 'hs_year');
   await bad({ program_id: 9999 }, 'program_id');
   await bad({ study_level: 7 }, 'study_level');                // البرنامج 2 مدته 4 سنوات
