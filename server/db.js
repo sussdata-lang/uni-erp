@@ -19,10 +19,19 @@ function migrate(db) {
   for (const f of fs.readdirSync(MIGRATIONS).filter((n) => n.endsWith('.sql')).sort()) {
     if (done.has(f)) continue;
     tx(db, () => {
-      db.exec(fs.readFileSync(path.join(MIGRATIONS, f), 'utf8'));
+      db.exec(skipExistingColumns(db, fs.readFileSync(path.join(MIGRATIONS, f), 'utf8')));
       db.prepare('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)').run(f, Date.now());
     });
   }
+}
+
+// SQLite لا يدعم ADD COLUMN IF NOT EXISTS: نحذف أسطر ALTER TABLE ... ADD COLUMN التي عمودها موجود أصلاً
+function skipExistingColumns(db, sql) {
+  return sql.split('\n').filter((line) => {
+    const m = /^\s*ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(\w+)/i.exec(line);
+    if (!m) return true;
+    return !db.prepare(`PRAGMA table_info(${m[1]})`).all().some((c) => c.name === m[2]);
+  }).join('\n');
 }
 
 // معاملة ذرية: كل شيء أو لا شيء
