@@ -9,6 +9,7 @@ import { runRules } from './rules.js';
 import { issueDocument } from './documents.js';
 import { linkedTargets } from './access.js';
 
+export const ACADEMIC = new Set(['postponement', 'withdrawal', 'program_transfer', 'grade_appeal', 'violation_report']);
 const pad = (n, w) => String(n).padStart(w, '0');
 
 function detectMime(buf) {
@@ -18,16 +19,35 @@ function detectMime(buf) {
   return null;
 }
 
-function validateDetails(service, input) {
-  const fields = JSON.parse(service.fields_json || '[]'), out = {};
+// حقول «ref»: قوائم مرتبطة ببيانات الطالب نفسه (برامج أخرى، علاماته…). تُحوَّل لقائمة خيارات نصية تحمل المعرّف [#id]
+export function refOptions(db, studentId, ref) {
+  const p = db.prepare('SELECT program_id, study_level FROM student_profiles WHERE user_id = ?').get(Number(studentId));
+  if (ref === 'program') return db.prepare('SELECT id, faculty, name FROM programs WHERE active = 1 AND id != ? ORDER BY faculty, name').all(p?.program_id ?? -1).map((r) => ({ id: r.id, label: `${r.faculty} — ${r.name} [#${r.id}]` }));
+  if (ref === 'my_course') return db.prepare('SELECT id, name, level FROM courses WHERE program_id = ? AND level <= ? ORDER BY level, name').all(p?.program_id ?? -1, p?.study_level ?? 0).map((r) => ({ id: r.id, label: `${r.name} (السنة ${r.level}) [#${r.id}]` }));
+  if (ref === 'my_grade') return db.prepare("SELECT id, course, academic_year ay, mark FROM grades WHERE student_id = ? AND workflow_status = 'approved' ORDER BY academic_year DESC, course").all(Number(studentId)).map((r) => ({ id: r.id, label: `${r.course} (${r.ay ?? r.term}) — ${r.mark} [#${r.id}]` }));
+  return [];
+}
+export const expandFields = (db, studentId, fieldsJson) => JSON.parse(fieldsJson).map((f) => (f.type === 'ref' ? { ...f, type: 'select', options: refOptions(db, studentId, f.ref).map((o) => o.label) } : f));
+
+// تحقق صارم من الحقول وفق تعريف الخدمة، وتجاهل أي حقل غير معرَّف
+function validateDetails(service, input, ctx) {
+  const fields = JSON.parse(service.fields_json), out = {};
   for (const f of fields) {
+    if (f.type === 'ref') {
+      const v = input?.[f.name];
+      if (v === undefined || v === null || v === '') { if (f.required) throw new HttpError(400, `الحقل «${f.label}» مطلوب.`, 'validation'); continue; }
+      const opt = refOptions(ctx.db, ctx.studentId, f.ref).find((o) => o.label === v);
+      if (!opt) throw new HttpError(400, `قيمة غير صالحة في «${f.label}».`, 'validation');
+      out[f.name] = opt.label.replace(/\s*\[#\d+\]$/, ''); out[`${f.name}__id`] = opt.id;
+      continue;
+    }
     let v = input?.[f.name];
     if (v === undefined || v === null || v === '') v = f.default;
     if (v === undefined || v === '') { if (f.required) throw new HttpError(400, `الحقل «${f.label}» مطلوب.`, 'validation'); continue; }
     if (f.type === 'select') { if (!f.options.includes(v)) throw new HttpError(400, `قيمة غير صالحة في «${f.label}».`, 'validation'); }
     else if (f.type === 'number') { v = Number(v); if (!Number.isInteger(v) || v < (f.min ?? 0) || v > (f.max ?? 1000)) throw new HttpError(400, `قيمة غير صالحة في «${f.label}».`, 'validation'); }
     else if (f.type === 'date') { if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v))) throw new HttpError(400, `تاريخ غير صالح في «${f.label}».`, 'validation'); }
-    else { v = String(v).trim(); if (v.length < 1 || v.length > 300) throw new HttpError(400, `«${f.label}» يجب ألا يتجاوز 300 حرف.`, 'validation'); }
+    else { v = String(v).trim(); if (v.length < 1 || v.length > 200) throw new HttpError(400, `«${f.label}» يجب ألا يتجاوز 200 حرف.`, 'validation'); }
     out[f.name] = v;
   }
   return out;
@@ -37,6 +57,7 @@ export function addEvent(db, requestId, actorLabel, text) {
   db.prepare('INSERT INTO request_events (request_id, at, actor_label, text) VALUES (?,?,?,?)').run(requestId, Date.now(), actorLabel, text);
 }
 
+// نطاق رؤية الطلبات: all (كل الطلبات) | unit (المحالة إلى وحدة المستخدم) | own (طلبات الطالب نفسه)
 export const scopeOf = (user) => (user.can('request:read_all') ? 'all' : user.can('request:read_unit') ? 'unit' : 'own');
 export function visibleTo(user, r) {
   const s = scopeOf(user);
@@ -49,15 +70,8 @@ export function requestView(db, r, { withStudent = false } = {}) {
   const svc = db.prepare('SELECT code, label, sla_hours FROM service_types WHERE code = ?').get(r.service_code);
   const att = db.prepare('SELECT id, orig_name, size, mime FROM attachments WHERE request_id = ?').get(r.id);
   const doc = db.prepare('SELECT code, issued_at FROM documents WHERE request_id = ?').get(r.id);
-  let details = {};
-  try { details = JSON.parse(r.details_json || '{}'); } catch { /* ignore */ }
-  let academicDetails = null;
-  try {
-    academicDetails = db.prepare('SELECT * FROM academic_request_details WHERE request_id = ?').get(r.id);
-  } catch { /* ignore */ }
-
   const v = {
-    id: r.id, no: r.no, service: svc, details, academicDetails, status: r.status,
+    id: r.id, no: r.no, service: svc, details: Object.fromEntries(Object.entries(JSON.parse(r.details_json)).filter(([k]) => !k.endsWith('__id'))), status: r.status,
     rejectReason: r.reject_reason, rejectedBy: r.rejected_by, createdAt: r.created_at, decidedAt: r.decided_at,
     attachment: att ? { id: att.id, name: att.orig_name, size: att.size } : null,
     document: doc ? { code: doc.code, issuedAt: doc.issued_at } : null,
@@ -66,7 +80,7 @@ export function requestView(db, r, { withStudent = false } = {}) {
   };
   if (withStudent) {
     const s = db.prepare('SELECT id, display_name, student_no FROM users WHERE id = ?').get(r.student_id);
-    v.student = s ? { id: s.id, name: s.display_name, studentNo: s.student_no } : null;
+    v.student = { id: s.id, name: s.display_name, studentNo: s.student_no };
   }
   return v;
 }
@@ -74,7 +88,7 @@ export function requestView(db, r, { withStudent = false } = {}) {
 export function createRequest({ db, cfg }, user, input, ip) {
   const service = db.prepare('SELECT * FROM service_types WHERE code = ? AND enabled = 1').get(input?.service);
   if (!service) throw new HttpError(400, 'خدمة غير معروفة.', 'validation');
-  const details = validateDetails(service, input.details);
+  const details = validateDetails(service, input.details, { db, studentId: user.id });
 
   let att = null;
   if (input.attachment) {
@@ -96,28 +110,15 @@ export function createRequest({ db, cfg }, user, input, ip) {
       const no = `REQ-${new Date().getFullYear()}-${pad(nextId, 5)}`;
       const now = Date.now();
       const rejected = !check.ok;
-
       db.prepare(`INSERT INTO requests (id, no, student_id, service_code, details_json, status, reject_reason, rejected_by, created_at, decided_at)
                   VALUES (?,?,?,?,?,?,?,?,?,?)`)
         .run(nextId, no, user.id, service.code, JSON.stringify(details), rejected ? 'rejected' : 'review', rejected ? check.message : null, rejected ? 'auto' : null, now, rejected ? now : null);
-
-      if (['postponement', 'withdrawal', 'program_transfer', 'grade_appeal', 'violation_report'].includes(service.code)) {
-        try {
-          db.prepare(`INSERT INTO academic_request_details (request_id, request_category, target_program_id, target_course_id, target_grade_id, claimed_mark, violation_type, justification, updated_at)
-                      VALUES (?,?,?,?,?,?,?,?,?)`).run(
-            nextId, service.code,
-            Number(details.target_program_id) || null,
-            Number(details.target_course_id) || null,
-            Number(details.target_grade_id) || null,
-            Number(details.claimed_mark) || null,
-            details.violation_type || null,
-            details.justification || details.reason || null,
-            now
-          );
-        } catch { /* table may not exist yet */ }
+      addEvent(db, nextId, user.label, 'تقديم الطلب');
+      if (ACADEMIC.has(service.code)) {
+        db.prepare(`INSERT INTO academic_request_details (request_id, request_category, target_program_id, target_course_id, target_grade_id, claimed_mark, violation_type, justification, updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?)`).run(nextId, service.code, details.target_program_id__id ?? null, details.target_course_id__id ?? null, details.target_grade_id__id ?? null,
+          Number.isInteger(details.claimed_mark) ? details.claimed_mark : null, details.violation_type ?? null, details.justification ?? details.reason ?? null, now);
       }
-
-      addEvent(db, nextId, user.label, 'تقديم الطلب الأكاديمي');
       if (att) {
         const stored = crypto.randomBytes(16).toString('hex');
         fs.mkdirSync(cfg.uploadDir, { recursive: true });
@@ -126,7 +127,7 @@ export function createRequest({ db, cfg }, user, input, ip) {
         db.prepare('INSERT INTO attachments (request_id, orig_name, stored_name, mime, size, sha256) VALUES (?,?,?,?,?,?)')
           .run(nextId, att.name, stored, att.mime, att.buf.length, sha256(att.buf));
       }
-      addEvent(db, nextId, 'النظام', rejected ? `الفحص الآلي: رُفض الطلب تلقائياً (${check.message})` : 'الفحص الآلي: اجتاز القواعد، أُحيل لمراجعة شؤون الطلاب');
+      addEvent(db, nextId, 'النظام', rejected ? `الفحص الآلي: رُفض الطلب تلقائياً (${check.message})` : 'الفحص الآلي: اجتاز القواعد، أُحيل لمراجعة الموظف');
       audit(db, user, `تقديم طلب: ${service.label}${rejected ? ' (رفض آلي)' : ''}`, no, ip);
       return nextId;
     });
@@ -149,6 +150,7 @@ export function listRequests({ db }, user, query) {
 
 export function getRequest({ db }, user, id) {
   const r = db.prepare('SELECT * FROM requests WHERE id = ?').get(Number(id));
+  // الطالب لا يرى إلا طلباته، والرد 404 كي لا يُكشف وجود طلبات الآخرين
   if (!r || !visibleTo(user, r)) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
   return requestView(db, r, { withStudent: scopeOf(user) !== 'own' });
 }
@@ -159,7 +161,7 @@ export function decide({ db, cfg }, user, id, action, reason, ip) {
     if (!r) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
     if (!visibleTo(user, r)) throw new HttpError(404, 'الطلب غير موجود.', 'not_found');
     if (r.status !== 'review') throw new HttpError(409, 'تم البت في هذا الطلب مسبقاً.', 'conflict');
-    if (r.student_id === user.id) throw new HttpError(403, 'لا يجوز البت في طلبك الخاص.', 'forbidden');
+    if (r.student_id === user.id) throw new HttpError(403, 'لا يجوز البت في طلبك الخاص (فصل المهام).', 'forbidden');
     const now = Date.now();
     if (action === 'approve') {
       const svc = db.prepare('SELECT * FROM service_types WHERE code = ?').get(r.service_code);
@@ -169,7 +171,7 @@ export function decide({ db, cfg }, user, id, action, reason, ip) {
       addEvent(db, r.id, user.label, code ? `اعتماد الطلب وإصدار وثيقة موقعة برمز ${code}` : 'اعتماد الطلب');
       audit(db, user, 'اعتماد طلب', r.no, ip);
     } else {
-      if (typeof reason !== 'string' || reason.trim().length < 3 || reason.length > 300) throw new HttpError(400, 'سبب الرفض مطلوب (3-300 حرفاً).', 'validation');
+      if (typeof reason !== 'string' || reason.trim().length < 3 || reason.length > 300) throw new HttpError(400, 'سبب الرفض مطلوب (3-300 حرفاً) ويظهر للطالب.', 'validation');
       db.prepare("UPDATE requests SET status = 'rejected', rejected_by = 'staff', reject_reason = ?, decided_at = ?, decided_by = ? WHERE id = ?").run(reason.trim(), now, user.id, r.id);
       addEvent(db, r.id, user.label, `رفض الطلب: ${reason.trim()}`);
       audit(db, user, 'رفض طلب', r.no, ip);
@@ -178,6 +180,7 @@ export function decide({ db, cfg }, user, id, action, reason, ip) {
   });
 }
 
+// إحالة طلب قيد المراجعة إلى وحدة مرتبطة بوحدة المستخدم (أو إلى أي وحدة لمن لا وحدة له، كالمدير)
 export function forwardRequest({ db }, user, id, input, ip) {
   return tx(db, () => {
     const r = db.prepare('SELECT * FROM requests WHERE id = ?').get(Number(id));
@@ -187,11 +190,12 @@ export function forwardRequest({ db }, user, id, input, ip) {
     if (!t || !t.active) throw new HttpError(400, 'الوحدة المطلوبة غير موجودة أو معطَّلة.', 'validation');
     if (r.assigned_unit_id === t.id) throw new HttpError(409, 'الطلب عند هذه الوحدة أصلاً.', 'conflict');
     if (user.unit_id) {
-      if (!linkedTargets(db, user.unit_id).some((x) => x.id === t.id)) throw new HttpError(403, 'وحدتك غير مرتبطة بهذه الوحدة.', 'forbidden');
+      if (!linkedTargets(db, user.unit_id).some((x) => x.id === t.id)) throw new HttpError(403, 'وحدتك غير مرتبطة بهذه الوحدة؛ تُحال الطلبات إلى الوحدات المرتبطة فقط.', 'forbidden');
     } else if (user.role !== 'admin' || user.role_key) {
-      throw new HttpError(403, 'حسابك غير مرتبط بوحدة إدارية.', 'forbidden');
+      throw new HttpError(403, 'حسابك غير مرتبط بوحدة إدارية، فلا يمكنه الإحالة.', 'forbidden');
     }
     const note = String(input?.note ?? '').replace(/\s+/g, ' ').trim();
+    if (note.length > 300) throw new HttpError(400, 'الملاحظة لا تتجاوز 300 حرف.', 'validation');
     db.prepare('UPDATE requests SET assigned_unit_id = ? WHERE id = ?').run(t.id, r.id);
     addEvent(db, r.id, user.label, `إحالة الطلب إلى «${t.name}»${note ? `: ${note}` : ''}`);
     audit(db, user, `إحالة طلب إلى ${t.name}`, r.no, ip);
@@ -212,6 +216,6 @@ export function readAttachment({ db, cfg }, user, id) {
   if (!a || !visibleTo(user, db.prepare('SELECT * FROM requests WHERE id = ?').get(a.request_id))) throw new HttpError(404, 'غير موجود.', 'not_found');
   const file = path.join(cfg.uploadDir, a.stored_name);
   const buf = fs.readFileSync(file);
-  if (sha256(buf) !== a.sha256) throw new HttpError(500, 'سلامة المرفق مخالفة.', 'integrity');
+  if (sha256(buf) !== a.sha256) throw new HttpError(500, 'سلامة المرفق مخالفة للمسجَّل.', 'integrity');
   return { buf, mime: a.mime, name: a.orig_name };
 }

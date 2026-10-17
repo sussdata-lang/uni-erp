@@ -1,13 +1,16 @@
 import { tx } from '../db.js';
-import { enqueueCertificate, certDir } from './enrollcert.js';
+import { enqueueCertificate } from './enrollcert.js';
 import { audit } from '../audit.js';
 import { hashPassword, tempPassword } from '../security.js';
 import { HttpError } from '../http.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { certDir } from './enrollcert.js';
+import { purgeStudentFiles } from './studentfiles.js';
 
 /* ------------------------------------------------------------------
    تسجيل الطلاب: تعريف الحقول مصدر واحد للتحقق في الخادم ولرسم النموذج في الواجهة.
+   قوائم الاختيار هنا قيم افتراضية معقولة؛ تعدَّل في الكود، أما البرامج فتُدار من الواجهة.
 ------------------------------------------------------------------- */
 export const GOVERNORATES = ['دمشق', 'ريف دمشق', 'حلب', 'حمص', 'حماة', 'اللاذقية', 'طرطوس', 'إدلب', 'درعا', 'السويداء', 'القنيطرة', 'دير الزور', 'الرقة', 'الحسكة', 'خارج سوريا'];
 export const STATUS_LABEL = { active: 'مقيَّد', suspended: 'موقوف القيد', withdrawn: 'منسحب', transferred: 'محوَّل', graduated: 'متخرج' };
@@ -19,6 +22,7 @@ const HS_TYPES = ['الثانوية العامة - الفرع العلمي', 'ا
 const ADMISSIONS = ['القبول العام (المفاضلة)', 'التعليم الموازي', 'التعليم المفتوح / الافتراضي', 'أبناء أعضاء الهيئة التدريسية', 'الطلاب الوافدون', 'نقل من جامعة أخرى', 'أخرى'];
 const RELATIONS = ['الأب', 'الأم', 'الأخ', 'الأخت', 'الزوج/الزوجة', 'قريب آخر', 'وصي'];
 
+// الجهة التي برنامجها الوحيد يحمل اسمها (كلية، معهد، مركز) تُعرض باسمها فقط
 export const programLabel = (p) => (p.faculty === p.name ? p.faculty : `${p.faculty} — ${p.degree} ${p.name}`);
 
 const opts = (a) => a.map((x) => (typeof x === 'object' ? x : { v: x, l: x }));
@@ -65,11 +69,6 @@ export function sections(db) {
       F('study_level', 'السنة الدراسية الحالية', 'select', { required: true, options: opts([1, 2, 3, 4].map((n) => ({ v: n, l: levelLabel(n) }))), default: 1 }),
       F('status', 'حالة القيد', 'select', { required: true, editOnly: true, default: 'active', options: opts(Object.entries(STATUS_LABEL).map(([v, l]) => ({ v, l }))) }),
     ] },
-    { id: 'attachments', title: 'المرفقات والثبوتيات', fields: [
-      F('attachment_personal_id', 'الثبوتيات الشخصية', 'file', { icon: '🪪', accept: '.pdf,image/*', hint: 'صورة الهوية أو جواز السفر (PDF أو صورة)' }),
-      F('attachment_photo', 'الصورة الشخصية', 'file', { icon: '🖼️', accept: 'image/*', hint: 'صورة شخصية رسمية للطالب' }),
-      F('attachment_other', 'مرفقات أخرى', 'file', { icon: '📎', accept: '.pdf,image/*,.doc,.docx', multiple: true, hint: 'أي وثائق أو شهادات إضافية' }),
-    ] },
     { id: 'guardian', title: 'ولي الأمر وجهة الطوارئ', fields: [
       F('guardian_name', 'اسم ولي الأمر', 'name', { required: true, max: 80 }),
       F('guardian_relation', 'صلة القرابة', 'select', { required: true, options: opts(RELATIONS) }),
@@ -100,10 +99,6 @@ function parse(db, f, raw) {
       return s;
     }
     case 'longtext': if (s.length > max) fail(f, `«${f.label}» يجب ألا يتجاوز ${max} حرفاً.`); return s;
-    case 'file': {
-      if (s.length > 1000 || CTRL.test(s)) fail(f, `«${f.label}» مسار مرفق غير صالح.`);
-      return s;
-    }
     case 'nid': {
       const v = s.replace(/\s/g, '').toUpperCase();
       if (!/^[0-9A-Z]{6,20}$/.test(v)) fail(f, `«${f.label}» غير صالح (6-20 خانة من الأرقام أو الأحرف اللاتينية).`);
@@ -155,12 +150,12 @@ export function validateProfile(db, input, { current = null } = {}) {
     if (typeof raw === 'string' && f.type !== 'longtext') raw = raw.replace(/\s+/g, ' ').trim();
     if (typeof raw === 'string' && f.type === 'longtext') raw = raw.trim();
     if ((raw === undefined || raw === null || raw === '') && f.name === 'status' && isUpdate) raw = current.status;
-    if ((raw === undefined || raw === null || raw === '') && f.type === 'file' && isUpdate) raw = current[f.name];
     if (raw === undefined || raw === null || raw === '') raw = f.default;
     if (raw === undefined || raw === null || raw === '') {
       if (f.required) fail(f, `الحقل «${f.label}» مطلوب.`);
       out[f.name] = null; continue;
     }
+    // البرنامج المعطَّل لا يُقبل لتسجيل جديد، لكن يبقى مقبولاً لتعديل طالب مقيَّد فيه أصلاً
     if (f.type === 'program' && isUpdate && Number(raw) === current.program_id) { out[f.name] = current.program_id; continue; }
     if (f.type === 'program') {
       const p = db.prepare('SELECT active FROM programs WHERE id = ?').get(Number(raw));
@@ -169,6 +164,7 @@ export function validateProfile(db, input, { current = null } = {}) {
     out[f.name] = parse(db, f, raw);
   }
 
+  // قيود متقاطعة بين الحقول
   const now = new Date(), y = now.getFullYear();
   if (out.birth_date) {
     const age = y - Number(out.birth_date.slice(0, 4));
@@ -183,33 +179,25 @@ export function validateProfile(db, input, { current = null } = {}) {
 
 /* ---------------- تعريف العرض ---------------- */
 const fullName = (p) => [p.first_name, p.father_name, p.last_name].filter(Boolean).join(' ');
-const shortName = (p) => [p.first_name, p.father_name, p.last_name].filter(Boolean).join(' ');
-const maskId = (s) => (!s || s.length <= 4 ? s : '•'.repeat(s.length - 4) + s.slice(-4));
+const shortName = (p) => [p.first_name, p.father_name, p.last_name].join(' ');
+const maskId = (s) => (s.length <= 4 ? s : '•'.repeat(s.length - 4) + s.slice(-4));
 
 const SELECT = `SELECT p.*, u.student_no, u.username, u.display_name, u.must_change_password,
-                       g.faculty, g.faculty_id, g.name AS program_name, g.degree, g.years
+                       g.faculty, g.name AS program_name, g.degree, g.years
                 FROM student_profiles p JOIN users u ON u.id = p.user_id JOIN programs g ON g.id = p.program_id`;
 
 function view(db, r, { full = true, own = false } = {}) {
   const base = {
     id: r.user_id, studentNo: r.student_no, name: fullName(r), status: r.status, statusLabel: STATUS_LABEL[r.status],
-    program: { id: r.program_id, facultyId: r.faculty_id, faculty: r.faculty, name: r.program_name, degree: r.degree, years: r.years, label: programLabel({ faculty: r.faculty, name: r.program_name, degree: r.degree }) },
-    level: r.study_level, levelLabel: levelLabel(r.study_level),
+    program: { id: r.program_id, faculty: r.faculty, name: r.program_name, degree: r.degree, years: r.years, label: programLabel({ faculty: r.faculty, name: r.program_name, degree: r.degree }) }, level: r.study_level, levelLabel: levelLabel(r.study_level),
     enrollYear: r.enroll_year, phone: r.phone, nationalId: full ? r.national_id : maskId(r.national_id),
   };
   if (!full) return base;
-  const profile = {}; for (const c of COLUMNS) profile[c] = r[c] ?? null;
+  const profile = {}; for (const c of COLUMNS) profile[c] = r[c];
   if (own) delete profile.notes;
-  return {
-    ...base, profile, username: r.username, mustChangePassword: !!r.must_change_password,
-    attachments: {
-      personalId: r.attachment_personal_id ?? null,
-      photo: r.attachment_photo ?? null,
-      other: r.attachment_other ?? null,
-    },
+  return { ...base, profile, username: r.username, mustChangePassword: !!r.must_change_password,
     createdAt: r.created_at, updatedAt: r.updated_at,
-    activeHolds: db.prepare('SELECT COUNT(*) c FROM student_holds WHERE student_id = ? AND active = 1').get(r.user_id).c,
-  };
+    activeHolds: db.prepare('SELECT COUNT(*) c FROM student_holds WHERE student_id = ? AND active = 1').get(r.user_id).c };
 }
 
 export function registrationOptions(db, canManage) {
@@ -236,7 +224,8 @@ export async function registerStudent({ db, cfg }, actor, input, ip) {
   duplicateCheck(db, p);
   const pw = tempPassword(), hash = await hashPassword(pw, cfg.scryptN);
   const { id, studentNo } = tx(db, () => {
-    duplicateCheck(db, p);
+    duplicateCheck(db, p);                                    // إعادة فحص داخل المعاملة ضد السباق
+    // الترميز: <أحرف الكلية بالإنكليزية>-<سنة القيد>-<تسلسل من 4 خانات>، والتسلسل مستقل لكل كلية وسنة
     const fac = db.prepare('SELECT f.code FROM programs g JOIN faculties f ON f.id = g.faculty_id WHERE g.id = ?').get(p.program_id);
     if (!fac) throw new HttpError(400, 'هذا البرنامج غير مرتبط بكلية؛ عدّله من شاشة الكليات والبرامج أولاً.', 'validation', 'program_id');
     const prefix = `${fac.code}-${p.enroll_year}-`;
@@ -245,19 +234,13 @@ export async function registerStudent({ db, cfg }, actor, input, ip) {
     const u = composeUser(db, p), now = Date.now();
     const uid = Number(db.prepare('INSERT INTO users (username, display_name, password_hash, role, student_no, program, must_change_password, created_at) VALUES (?,?,?,?,?,?,1,?)')
       .run(no, u.display, hash, 'student', no, u.program, now).lastInsertRowid);
-    const cols = COLUMNS.filter((c) => {
-      try { db.prepare(`SELECT ${c} FROM student_profiles LIMIT 1`); return true; } catch { return false; }
-    });
+    const cols = COLUMNS;
     db.prepare(`INSERT INTO student_profiles (user_id, ${cols.join(', ')}, created_by, created_at, updated_at) VALUES (?, ${cols.map(() => '?').join(', ')}, ?, ?, ?)`)
       .run(uid, ...cols.map((c) => p[c]), actor.id, now, now);
-    try {
-      db.prepare('INSERT INTO student_status_history (student_id, old_status, new_status, old_level, new_level, reason, changed_by, created_at) VALUES (?,?,?,?,?,?,?,?)')
-        .run(uid, null, 'active', null, p.study_level, 'تسجيل طالب مستجد', actor.id, now);
-    } catch { /* إن لم يُنشأ جدول التاريخ بعد */ }
     audit(db, actor, 'تسجيل طالب جديد', no, ip);
     return { id: uid, studentNo: no };
   });
-  enqueueCertificate({ db, cfg }, id);
+  enqueueCertificate({ db, cfg }, id);                       // شهادة التسجيل الموقَّعة + الختم الزمني: في الخلفية، دون تأخير الاستجابة أو إفشالها
   return { student: getStudent({ db }, id), credentials: { username: studentNo, tempPassword: pw } };
 }
 
@@ -269,60 +252,26 @@ export function getStudent({ db }, id, { own = false } = {}) {
 
 export function myProfile({ db }, user) {
   const r = db.prepare(`${SELECT} WHERE p.user_id = ?`).get(user.id);
-  return r ? view(db, r, { own: true }) : null;
+  return r ? view(db, r, { own: true }) : null;                 // حسابات قديمة بلا ملف
 }
 
 const like = (s) => '%' + s.replace(/[\\%_]/g, '\\$&') + '%';
-const ST_SORT = {
-  studentNo: 'u.student_no',
-  name: "(p.first_name || ' ' || p.father_name || ' ' || p.last_name)",
-  faculty: 'g.faculty',
-  program: 'g.name',
-  level: 'p.study_level',
-  enrollYear: 'p.enroll_year',
-  status: 'p.status',
-  hsScore: 'p.hs_score',
-  createdAt: 'p.created_at',
-};
-
-// جدول أسماء الطلاب الموحد (مشابه لجدول المواد والعلامات مع كافة معلومات التسجيل والفلاتر والترتيب)
 export function listStudents({ db }, query) {
   const where = [], args = [];
-  const q = String(query.q ?? '').trim().slice(0, 80);
+  const q = String(query.q ?? '').trim().slice(0, 60);
   if (q) {
     where.push(`(u.student_no LIKE ? ESCAPE '\\' OR p.national_id LIKE ? ESCAPE '\\' OR p.phone LIKE ? ESCAPE '\\'
-      OR (p.first_name || ' ' || p.father_name || ' ' || p.last_name) LIKE ? ESCAPE '\\'
-      OR p.mother_name LIKE ? ESCAPE '\\' OR p.city LIKE ? ESCAPE '\\' OR g.faculty LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\')`);
-    const lq = like(q);
-    args.push(lq, like(q.toUpperCase()), lq, lq, lq, lq, lq, lq);
+      OR (p.first_name || ' ' || p.father_name || ' ' || p.last_name) LIKE ? ESCAPE '\\')`);
+    args.push(like(q), like(q.toUpperCase()), like(q), like(q));
   }
-  if (query.faculty && Number.isInteger(Number(query.faculty))) { where.push('g.faculty_id = ?'); args.push(Number(query.faculty)); }
   if (query.program && Number.isInteger(Number(query.program))) { where.push('p.program_id = ?'); args.push(Number(query.program)); }
-  if (query.level && Number.isInteger(Number(query.level))) { where.push('p.study_level = ?'); args.push(Number(query.level)); }
   if (STATUS_LABEL[query.status]) { where.push('p.status = ?'); args.push(query.status); }
   if (Number.isInteger(Number(query.year)) && Number(query.year) > 0) { where.push('p.enroll_year = ?'); args.push(Number(query.year)); }
   const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
-
-  const size = Math.min(Math.max(Number(query.size || query.limit) || 25, 1), 200);
-  const total = db.prepare(`SELECT COUNT(*) c FROM student_profiles p JOIN users u ON u.id = p.user_id JOIN programs g ON g.id = p.program_id ${w}`).get(...args).c;
-  const pages = Math.max(1, Math.ceil(total / size));
-  const page = query.page ? Math.min(pages, Math.max(1, Number(query.page))) : (query.offset ? Math.floor(Number(query.offset) / size) + 1 : 1);
-  const offset = (page - 1) * size;
-  const sortCol = ST_SORT[query.sort] ?? ST_SORT.createdAt;
-  const sortDir = query.dir === 'asc' ? 'ASC' : 'DESC';
-
-  const rows = db.prepare(`${SELECT} ${w} ORDER BY ${sortCol} ${sortDir}, p.user_id DESC LIMIT ? OFFSET ?`).all(...args, size, offset);
-  const fullView = query.full !== '0';
-  const options = {
-    faculties: db.prepare('SELECT id, name FROM faculties ORDER BY id').all(),
-    programs: db.prepare('SELECT id, faculty, name, degree, faculty_id AS facultyId FROM programs ORDER BY faculty, name').all().map((p) => ({ id: p.id, facultyId: p.facultyId, label: programLabel(p) })),
-    years: db.prepare('SELECT DISTINCT enroll_year y FROM student_profiles ORDER BY y DESC').all().map((r) => r.y),
-    statuses: STATUS_LABEL,
-  };
-  return {
-    total, page, pages, size, options,
-    students: rows.map((r) => view(db, r, { full: fullView })),
-  };
+  const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200), offset = Math.max(Number(query.offset) || 0, 0);
+  const total = db.prepare(`SELECT COUNT(*) c FROM student_profiles p JOIN users u ON u.id = p.user_id ${w}`).get(...args).c;
+  const rows = db.prepare(`${SELECT} ${w} ORDER BY p.created_at DESC, p.user_id DESC LIMIT ? OFFSET ?`).all(...args, limit, offset);
+  return { total, students: rows.map((r) => view(db, r, { full: false })) };
 }
 
 export function updateStudent({ db }, actor, id, input, ip) {
@@ -330,82 +279,20 @@ export function updateStudent({ db }, actor, id, input, ip) {
   if (!cur) throw new HttpError(404, 'الطالب غير موجود.', 'not_found');
   const p = validateProfile(db, input, { current: cur });
   duplicateCheck(db, p, cur.user_id);
-  const validCols = COLUMNS.filter((c) => {
-    try { db.prepare(`SELECT ${c} FROM student_profiles LIMIT 1`); return true; } catch { return false; }
-  });
-  const changed = validCols.filter((c) => (cur[c] ?? null) !== (p[c] ?? null));
+  const changed = COLUMNS.filter((c) => (cur[c] ?? null) !== (p[c] ?? null));
   tx(db, () => {
     if (changed.length) {
       const now = Date.now(), u = composeUser(db, p);
-      db.prepare(`UPDATE student_profiles SET ${validCols.map((c) => `${c} = ?`).join(', ')}, updated_at = ? WHERE user_id = ?`).run(...validCols.map((c) => p[c]), now, cur.user_id);
+      db.prepare(`UPDATE student_profiles SET ${COLUMNS.map((c) => `${c} = ?`).join(', ')}, updated_at = ? WHERE user_id = ?`).run(...COLUMNS.map((c) => p[c]), now, cur.user_id);
       db.prepare('UPDATE users SET display_name = ?, program = ? WHERE id = ?').run(u.display, u.program, cur.user_id);
-      if (changed.includes('status') || changed.includes('study_level')) {
-        try {
-          db.prepare('INSERT INTO student_status_history (student_id, old_status, new_status, old_level, new_level, reason, changed_by, created_at) VALUES (?,?,?,?,?,?,?,?)')
-            .run(cur.user_id, cur.status, p.status, cur.study_level, p.study_level, String(input?.status_reason || 'تحديث بيانات القيد'), actor.id, now);
-        } catch { /* جدول التاريخ اختياري */ }
-      }
     }
     const no = db.prepare('SELECT student_no FROM users WHERE id = ?').get(cur.user_id).student_no;
     const labels = Object.fromEntries(allFields(sections(db)).map((f) => [f.name, f.label]));
     if (changed.includes('status')) audit(db, actor, `تغيير حالة القيد: ${STATUS_LABEL[cur.status]} ← ${STATUS_LABEL[p.status]}`, no, ip);
     const rest = changed.filter((c) => c !== 'status');
-    if (rest.length) audit(db, actor, `تعديل ملف طالب (${rest.map((c) => labels[c] || c).join('، ')})`.slice(0, 300), no, ip);
+    if (rest.length) audit(db, actor, `تعديل ملف طالب (${rest.map((c) => labels[c]).join('، ')})`.slice(0, 300), no, ip);   // أسماء الحقول فقط، لا القيم
   });
   return getStudent({ db }, cur.user_id);
-}
-
-// البند 7: سجل الطالب الموحد (صفحة واحدة تجمع بياناته ومرفقاته وعلاماته ومعدله وترتيبه وذممه وطلباته وتاريخ تعديل حالته)
-export function getUnifiedStudentRecord({ db }, studentId) {
-  const st = getStudent({ db }, Number(studentId));
-  const grades = db.prepare(`SELECT g.*, c.code AS course_code FROM grades g LEFT JOIN courses c ON c.id = g.course_id WHERE g.student_id = ? ORDER BY g.level, g.semester, g.course, g.academic_year DESC`).all(st.id);
-  const seen = new Set(), latestGrades = [];
-  for (const g of grades) {
-    const k = g.course_id ?? `x${g.id}`;
-    if (!seen.has(k)) { seen.add(k); latestGrades.push(g); }
-  }
-  const totalHours = latestGrades.reduce((s, g) => s + (g.hours || 0), 0);
-  const earnedHours = latestGrades.filter((g) => g.mark >= 60).reduce((s, g) => s + (g.hours || 0), 0);
-  const failedCount = latestGrades.filter((g) => g.mark < 60).length;
-  const gpa = totalHours ? Math.round((latestGrades.reduce((s, g) => s + (g.hours || 0) * g.mark, 0) / totalHours) * 100) / 100 : null;
-
-  // ترتيب الطالب في دفعته
-  const cohort = db.prepare(`
-    SELECT sp.user_id, ROUND(SUM(gr.mark * COALESCE(gr.hours, 3)) * 1.0 / NULLIF(SUM(COALESCE(gr.hours, 3)), 0), 2) AS avg_gpa
-    FROM student_profiles sp LEFT JOIN grades gr ON gr.student_id = sp.user_id
-    WHERE sp.program_id = ? AND sp.enroll_year = ? AND sp.study_level = ?
-    GROUP BY sp.user_id HAVING avg_gpa IS NOT NULL ORDER BY avg_gpa DESC
-  `).all(st.program.id, st.enrollYear, st.level);
-  const rIdx = cohort.findIndex((x) => x.user_id === st.id);
-  const rank = rIdx >= 0 ? rIdx + 1 : null;
-
-  // التنبيه التلقائي للإنذار الأكاديمي
-  let academicAlert = { level: 0, status: 'safe', label: 'وضع أكاديمي سليم', message: null };
-  if (gpa !== null) {
-    if (gpa < 60 || failedCount >= 4) academicAlert = { level: 2, status: 'danger', label: 'إنذار أكاديمي', message: `تنبيه: المعدل التراكمي (${gpa}%) دون حد النجاح أو عدد مواد الرسوب (${failedCount}) تجاوز الحد المسموح.` };
-    else if (gpa < 65 || failedCount === 3) academicAlert = { level: 1, status: 'warning', label: 'يقترب من الإنذار الأكاديمي', message: `تنبيه مبكر: المعدل التراكمي (${gpa}%) قريب من حد الإنذار الأكاديمي (60%).` };
-  }
-
-  const holds = db.prepare('SELECT * FROM student_holds WHERE student_id = ? ORDER BY active DESC, created_at DESC').all(st.id);
-  const requests = db.prepare(`SELECT r.*, stp.label AS service_label, o.name AS unit_name FROM requests r JOIN service_types stp ON stp.code = r.service_code LEFT JOIN org_units o ON o.id = r.assigned_unit_id WHERE r.student_id = ? ORDER BY r.created_at DESC`).all(st.id);
-  let statusHistory = [];
-  try {
-    statusHistory = db.prepare(`SELECT h.*, u.display_name AS actor_name FROM student_status_history h LEFT JOIN users u ON u.id = h.changed_by WHERE h.student_id = ? ORDER BY h.created_at DESC`).all(st.id);
-  } catch { /* الجدول غير مفعّل بعد */ }
-  let attendanceLogs = [];
-  try {
-    attendanceLogs = db.prepare(`SELECT l.*, c.name AS course_name, c.code AS course_code FROM hall_attendance_logs l LEFT JOIN courses c ON c.id = l.course_id WHERE l.student_id = ? ORDER BY l.log_date DESC, l.entry_time DESC LIMIT 100`).all(st.id);
-  } catch { /* الجدول غير مفعّل بعد */ }
-
-  return {
-    student: st,
-    academicSummary: { gpa, totalHours, earnedHours, coursesCount: latestGrades.length, failedCount, cohortRank: rank, cohortTotal: cohort.length, academicAlert },
-    grades,
-    holds,
-    requests,
-    statusHistory,
-    attendanceLogs,
-  };
 }
 
 export async function resetStudentPassword({ db, cfg }, actor, id, ip) {
@@ -428,6 +315,7 @@ export const listFaculties = (db) => db.prepare('SELECT * FROM faculties ORDER B
   students: db.prepare('SELECT COUNT(*) c FROM student_profiles sp JOIN programs g ON g.id = sp.program_id WHERE g.faculty_id = ?').get(f.id).c,
 }));
 
+// رمز الكلية: الأحرف الأولى من كلمات اسمها الإنكليزي (بلا أدوات الربط)
 const STOP = new Set(['of', 'for', 'and', 'the', 'in', 'on', 'at', 'to', '&']);
 export const deriveCode = (en) => String(en).split(/\s+/).filter((w) => w && !STOP.has(w.toLowerCase())).map((w) => w[0].toUpperCase()).join('');
 
@@ -470,6 +358,7 @@ export const listPrograms = (db) => db.prepare('SELECT g.id, g.faculty, g.name, 
 export function addProgram({ db }, actor, b, ip) {
   const t = (v, n) => { const s = String(v ?? '').replace(/\s+/g, ' ').trim(); if (!s || s.length > n || CTRL.test(s)) throw new HttpError(400, 'بيانات البرنامج غير صالحة.', 'validation'); return s; };
   const name = t(b?.name, 80), degree = t(b?.degree || 'بكالوريوس', 30), years = Number(b?.years);
+  // الكلية تُختار من قائمة الجهات المعتمدة (facultyId) كي يرتبط البرنامج برمز الترميز
   const fac = db.prepare('SELECT id, name, active FROM faculties WHERE id = ?').get(Number(b?.facultyId));
   if (!fac) throw new HttpError(400, 'اختر الكلية أو المعهد من القائمة.', 'validation');
   if (!fac.active) throw new HttpError(400, 'هذه الجهة معطَّلة.', 'validation');
@@ -507,6 +396,7 @@ export function updateOwnContact({ db }, user, input, ip) {
 }
 
 /* ---------------- تعديل الكليات والبرامج وحذفها ---------------- */
+// أسماء الطلاب المركّبة (users.program) نسخة من بيانات البرنامج: تُجدَّد عند تعديل البرنامج أو الجهة
 function refreshStudentLabels(db, programIds) {
   for (const pid of programIds) {
     const rows = db.prepare('SELECT user_id, study_level FROM student_profiles WHERE program_id = ?').all(pid);
@@ -531,7 +421,7 @@ export function updateFaculty({ db }, actor, id, b, ip) {
   tx(db, () => {
     db.prepare('UPDATE faculties SET name = ?, name_en = ?, code = ?, kind = ? WHERE id = ?').run(name, nameEn, code, kind, f.id);
     if (name !== f.name) {
-      db.prepare('UPDATE programs SET name = ? WHERE faculty_id = ? AND name = ?').run(name, f.id, f.name);
+      db.prepare('UPDATE programs SET name = ? WHERE faculty_id = ? AND name = ?').run(name, f.id, f.name);   // البرنامج الأساسي يحمل اسم الجهة
       db.prepare('UPDATE programs SET faculty = ? WHERE faculty_id = ?').run(name, f.id);
       refreshStudentLabels(db, db.prepare('SELECT id FROM programs WHERE faculty_id = ?').all(f.id).map((p) => p.id));
     }
@@ -582,6 +472,8 @@ export function deleteProgram({ db }, actor, id, ip) {
 }
 
 /* ---------------- حذف طالب ---------------- */
+// الطلبات والوثائق الموقَّعة وسجل أحداث الطلب غير قابلة للحذف بتصميم النظام (مشغّلات SQLite تمنع ذلك)،
+// فالطالب الذي قدّم طلبات يُغيَّر وضع قيده (منسحب/موقوف...) ولا يُحذف.
 export function deleteStudent({ db, cfg }, actor, id, ip) {
   const u = db.prepare("SELECT id, student_no FROM users WHERE id = ? AND role = 'student'").get(Number(id));
   if (!u) throw new HttpError(404, 'الطالب غير موجود.', 'not_found');
@@ -589,11 +481,60 @@ export function deleteStudent({ db, cfg }, actor, id, ip) {
   if (reqs) throw new HttpError(409, `لا يمكن حذف طالب لديه ${reqs} طلباً؛ الطلبات والوثائق الموقَّعة سجلات دائمة. غيّر حالة قيده إلى «منسحب» أو «موقوف».`, 'conflict');
   const cert = db.prepare('SELECT file FROM student_certs WHERE student_id = ?').get(u.id);
   tx(db, () => {
-    for (const t of ['grades', 'student_holds', 'complaints', 'sessions', 'student_certs']) db.prepare(`DELETE FROM ${t} WHERE ${t === 'sessions' ? 'user_id' : 'student_id'} = ?`).run(u.id);
-    try { db.prepare('DELETE FROM student_status_history WHERE student_id = ?').run(u.id); } catch { /* ignore */ }
+    for (const t of ['grades', 'student_holds', 'complaints', 'sessions', 'student_certs', 'hall_logs', 'push_subscriptions']) db.prepare(`DELETE FROM ${t} WHERE ${t === 'sessions' || t === 'push_subscriptions' ? 'user_id' : 'student_id'} = ?`).run(u.id);
+    purgeStudentFiles(db, cfg, u.id);
     db.prepare('DELETE FROM student_profiles WHERE user_id = ?').run(u.id);
     db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
     audit(db, actor, 'حذف طالب وكل بياناته', u.student_no, ip);
   });
   if (cert) { try { fs.unlinkSync(path.join(certDir(cfg), cert.file)); } catch { /* الملف غير موجود */ } }
+}
+
+/* ---------------- جدول الطلاب الكامل (بحث/فلاتر/ترتيب/صفحات من الخادم) ---------------- */
+const TSORT = { studentNo: 'u.student_no', name: 'p.first_name, p.father_name, p.last_name', faculty: 'g.faculty', program: 'g.name', level: 'p.study_level', status: 'p.status', gender: 'p.gender',
+  birthDate: 'p.birth_date', governorate: 'p.governorate', hsScore: 'p.hs_score', enrollYear: 'p.enroll_year', admission: 'p.admission_type', createdAt: 'p.created_at' };
+
+export function listStudentsTable({ db }, q) {
+  const where = [], args = [];
+  const term = String(q.q ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (term) {
+    const l = like(term), L = like(term.toUpperCase());
+    where.push(`(u.student_no LIKE ? ESCAPE '\\' OR p.national_id LIKE ? ESCAPE '\\' OR p.phone LIKE ? ESCAPE '\\' OR p.email LIKE ? ESCAPE '\\' OR p.mother_name LIKE ? ESCAPE '\\' OR p.guardian_name LIKE ? ESCAPE '\\'
+      OR g.faculty LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\' OR (p.first_name || ' ' || p.father_name || ' ' || p.last_name) LIKE ? ESCAPE '\\')`);
+    args.push(l, L, l, l, l, l, l, l, l);
+  }
+  const eq = (col, v) => { where.push(`${col} = ?`); args.push(v); };
+  if (Number(q.faculty) > 0) eq('g.faculty_id', Number(q.faculty));
+  if (Number(q.program) > 0) eq('p.program_id', Number(q.program));
+  if (Number(q.level) > 0) eq('p.study_level', Number(q.level));
+  if (STATUS_LABEL[q.status]) eq('p.status', q.status);
+  if (q.gender === 'ذكر' || q.gender === 'أنثى') eq('p.gender', q.gender);
+  if (GOVERNORATES.includes(q.governorate)) eq('p.governorate', q.governorate);
+  if (Number(q.enrollYear) > 0) eq('p.enroll_year', Number(q.enrollYear));
+  if (String(q.admission ?? '') && ADMISSIONS.includes(q.admission)) eq('p.admission_type', q.admission);
+  if (q.files === 'none') where.push('NOT EXISTS (SELECT 1 FROM student_files f WHERE f.student_id = p.user_id)');
+  else if (q.files === 'some') where.push('EXISTS (SELECT 1 FROM student_files f WHERE f.student_id = p.user_id)');
+  if (q.holds === '1') where.push('EXISTS (SELECT 1 FROM student_holds h WHERE h.student_id = p.user_id AND h.active = 1)');
+  const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const FROM = 'FROM student_profiles p JOIN users u ON u.id = p.user_id JOIN programs g ON g.id = p.program_id';
+  const sum = db.prepare(`SELECT COUNT(*) n, SUM(p.status = 'active') active, SUM(p.gender = 'ذكر') male, SUM(p.gender = 'أنثى') female ${FROM} ${W}`).get(...args);
+  const size = Math.min(100, Math.max(5, Number(q.size) || 25)), pages = Math.max(1, Math.ceil(sum.n / size)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
+  const col = TSORT[q.sort] ?? TSORT.createdAt, dir = q.dir === 'asc' ? 'ASC' : 'DESC';
+  const order = col.split(', ').map((c) => `${c} ${dir}`).join(', ');
+  const rows = db.prepare(`SELECT p.*, u.student_no, u.username, g.faculty, g.name AS program_name, g.degree, g.years,
+      (SELECT COUNT(*) FROM student_holds h WHERE h.student_id = p.user_id AND h.active = 1) holds,
+      (SELECT COUNT(*) FROM student_files f WHERE f.student_id = p.user_id) files,
+      (SELECT MAX(f.id) FROM student_files f WHERE f.student_id = p.user_id AND f.kind = 'photo') photo_id
+    ${FROM} ${W} ORDER BY ${order}, p.user_id DESC LIMIT ? OFFSET ?`).all(...args, size, (page - 1) * size);
+  return {
+    total: sum.n, page, pages, size,
+    summary: { count: sum.n, active: sum.active ?? 0, male: sum.male ?? 0, female: sum.female ?? 0 },
+    options: { faculties: db.prepare('SELECT id, name FROM faculties ORDER BY id').all(), programs: db.prepare('SELECT g.id, g.faculty_id facultyId, g.faculty, g.name, g.degree FROM programs g ORDER BY g.faculty, g.name').all().map((x) => ({ id: x.id, facultyId: x.facultyId, label: programLabel(x) })),
+      governorates: GOVERNORATES, admissions: ADMISSIONS, enrollYears: db.prepare('SELECT DISTINCT enroll_year y FROM student_profiles ORDER BY y DESC').all().map((r) => r.y), statuses: STATUS_LABEL, levels: 4 },
+    rows: rows.map((r) => ({ id: r.user_id, studentNo: r.student_no, name: fullName(r), nameEn: r.name_en, motherName: r.mother_name, nationalId: r.national_id, gender: r.gender, birthDate: r.birth_date, birthPlace: r.birth_place,
+      nationality: r.nationality, maritalStatus: r.marital_status, phone: r.phone, email: r.email, governorate: r.governorate, city: r.city, address: r.address, hsType: r.hs_type, hsYear: r.hs_year, hsSchool: r.hs_school,
+      hsGovernorate: r.hs_governorate, hsScore: r.hs_score, faculty: r.faculty, program: r.program_name === r.faculty ? '' : r.program_name, degree: r.degree, admission: r.admission_type, ministerialNo: r.ministerial_no,
+      enrollYear: r.enroll_year, enrollTerm: r.enroll_term, level: r.study_level, levelLabel: levelLabel(r.study_level), status: r.status, statusLabel: STATUS_LABEL[r.status], guardianName: r.guardian_name,
+      guardianRelation: r.guardian_relation, guardianPhone: r.guardian_phone, emergencyPhone: r.emergency_phone, notes: r.notes, holds: r.holds, files: r.files, photoId: r.photo_id ?? null, createdAt: r.created_at })),
+  };
 }

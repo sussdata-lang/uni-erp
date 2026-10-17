@@ -5,6 +5,7 @@ import { writeXlsx } from '../lib/xlsx.js';
 import { writeDocx } from '../lib/docx.js';
 import { writeZip } from '../lib/zip.js';
 import { PASS_MARK } from './academics.js';
+import { logsForExport, KINDS as HALL_KINDS } from './attendance.js';
 import { sections, STATUS_LABEL, levelLabel, programLabel } from './students.js';
 
 const MAX_ROWS = 100_000;
@@ -21,6 +22,7 @@ export const DATASETS = [
   { id: 'requests', label: 'طلبات الطلاب', hint: 'الخدمات وحالاتها وأزمنة المعالجة' },
   { id: 'holds', label: 'العقوبات', hint: 'القائمة والمسوّاة' },
   { id: 'complaints', label: 'الشكاوى', hint: 'مع الردود وحالتها' },
+  { id: 'attendance', label: 'سجل دخول وخروج القاعات', hint: 'الحضور والفحوص بالباركود: المادة والقاعة والدخول والخروج' },
   { id: 'all', label: 'كل البيانات معاً', hint: 'مصنّف واحد بكل ما سبق' },
 ];
 export const FORMATS = ['xlsx', 'csv', 'json', 'docx'];
@@ -28,7 +30,9 @@ export const FORMATS = ['xlsx', 'csv', 'json', 'docx'];
 const int = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 export function parseFilters(q = {}) {
   const f = { faculty: int(q.faculty), program: int(q.program), level: int(q.level), semester: [1, 2].includes(Number(q.semester)) ? Number(q.semester) : null,
-    academicYear: /^\d{4}\/\d{4}$/.test(String(q.academicYear ?? '')) ? String(q.academicYear) : null, status: STATUS_LABEL[q.status] ? q.status : null, enrollYear: int(q.enrollYear) };
+    academicYear: /^\d{4}\/\d{4}$/.test(String(q.academicYear ?? '')) ? String(q.academicYear) : null, status: STATUS_LABEL[q.status] ? q.status : null, enrollYear: int(q.enrollYear),
+    akind: HALL_KINDS[q.akind] ? q.akind : null, ahall: q.ahall ? String(q.ahall).slice(0, 60) : null, acourse: int(q.acourse), astate: ['open', 'closed'].includes(q.astate) ? q.astate : null,
+    afrom: /^\d{4}-\d{2}-\d{2}$/.test(String(q.afrom ?? '')) ? q.afrom : null, ato: /^\d{4}-\d{2}-\d{2}$/.test(String(q.ato ?? '')) ? q.ato : null, tz: Number.isFinite(Number(q.tz)) ? Number(q.tz) : -180 };
   if (f.level && f.level > 4) f.level = null;
   return f;
 }
@@ -44,7 +48,7 @@ function studentWhere(f, { level = 'sp.study_level' } = {}) {
   return { w, a };
 }
 const where = (w) => (w.length ? 'WHERE ' + w.join(' AND ') : '');
-const fullName = (r) => [r.first_name, r.father_name, r.grandfather_name, r.last_name].filter(Boolean).join(' ');
+const fullName = (r) => [r.first_name, r.father_name, r.last_name].filter(Boolean).join(' ');
 const PROG = `FROM student_profiles sp JOIN users u ON u.id = sp.user_id JOIN programs g ON g.id = sp.program_id LEFT JOIN faculties fa ON fa.id = g.faculty_id`;
 
 function studentsSet(db, f) {
@@ -68,7 +72,7 @@ function gradesSet(db, f) {
   if (f.level) { w.push('gr.level = ?'); a.push(f.level); }
   if (f.semester) { w.push('gr.semester = ?'); a.push(f.semester); }
   if (f.academicYear) { w.push('gr.academic_year = ?'); a.push(f.academicYear); }
-  const rows = db.prepare(`SELECT gr.*, u.student_no, sp.first_name, sp.father_name, sp.grandfather_name, sp.last_name, g.faculty, g.name pname, c.code ccode
+  const rows = db.prepare(`SELECT gr.*, u.student_no, sp.first_name, sp.father_name, sp.last_name, g.faculty, g.name pname, c.code ccode
     FROM grades gr JOIN users u ON u.id = gr.student_id JOIN student_profiles sp ON sp.user_id = gr.student_id JOIN programs g ON g.id = sp.program_id LEFT JOIN faculties fa ON fa.id = g.faculty_id LEFT JOIN courses c ON c.id = gr.course_id
     ${where(w)} ORDER BY gr.academic_year, gr.level, gr.semester, u.student_no, gr.course`).all(...a);
   return { id: 'grades', title: 'العلامات', textCols: [0],
@@ -91,7 +95,7 @@ function coursesSet(db, f) {
 
 function requestsSet(db, f) {
   const { w, a } = studentWhere(f);
-  const rows = db.prepare(`SELECT r.*, u.student_no, sp.first_name, sp.father_name, sp.grandfather_name, sp.last_name, g.faculty, st.label slabel, o.name unit
+  const rows = db.prepare(`SELECT r.*, u.student_no, sp.first_name, sp.father_name, sp.last_name, g.faculty, st.label slabel, o.name unit
     FROM requests r JOIN users u ON u.id = r.student_id JOIN service_types st ON st.code = r.service_code LEFT JOIN org_units o ON o.id = r.assigned_unit_id
     LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id LEFT JOIN faculties fa ON fa.id = g.faculty_id ${where(w)} ORDER BY r.id`).all(...a);
   return { id: 'requests', title: 'الطلبات', textCols: [1, 0], headers: ['رقم الطلب', 'الرقم الجامعي', 'اسم الطالب', 'الكلية / المعهد', 'الخدمة', 'الحالة', 'سبب الرفض', 'الجهة الحالية', 'تاريخ التقديم', 'تاريخ القرار', 'ساعات المعالجة'],
@@ -100,7 +104,7 @@ function requestsSet(db, f) {
 
 function holdsSet(db, f) {
   const { w, a } = studentWhere(f);
-  const rows = db.prepare(`SELECT h.*, u.student_no, sp.first_name, sp.father_name, sp.grandfather_name, sp.last_name, g.faculty
+  const rows = db.prepare(`SELECT h.*, u.student_no, sp.first_name, sp.father_name, sp.last_name, g.faculty
     FROM student_holds h JOIN users u ON u.id = h.student_id LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id LEFT JOIN faculties fa ON fa.id = g.faculty_id ${where(w)} ORDER BY h.id`).all(...a);
   return { id: 'holds', title: 'العقوبات', textCols: [0], headers: ['الرقم الجامعي', 'اسم الطالب', 'الكلية / المعهد', 'النوع', 'الملاحظة', 'الحالة', 'تاريخ التسجيل', 'تاريخ التسوية'],
     rows: rows.map((r) => [r.student_no, fullName(r), r.faculty ?? '', HOLD_LABEL[r.hold_type] ?? r.hold_type, r.note ?? '', r.active ? 'قائمة' : 'مسددة', day(r.created_at), day(r.cleared_at)]) };
@@ -108,13 +112,21 @@ function holdsSet(db, f) {
 
 function complaintsSet(db, f) {
   const { w, a } = studentWhere(f);
-  const rows = db.prepare(`SELECT c.*, u.student_no, sp.first_name, sp.father_name, sp.grandfather_name, sp.last_name, g.faculty
+  const rows = db.prepare(`SELECT c.*, u.student_no, sp.first_name, sp.father_name, sp.last_name, g.faculty
     FROM complaints c JOIN users u ON u.id = c.student_id LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id LEFT JOIN faculties fa ON fa.id = g.faculty_id ${where(w)} ORDER BY c.id`).all(...a);
   return { id: 'complaints', title: 'الشكاوى', textCols: [0, 1], headers: ['رقم الشكوى', 'الرقم الجامعي', 'اسم الطالب', 'الموضوع', 'النص', 'الحالة', 'الرد', 'تاريخ التقديم', 'تاريخ الرد'],
     rows: rows.map((r) => [r.no, r.student_no, fullName(r), r.subject, r.body, CMP_LABEL[r.status] ?? r.status, r.response ?? '', day(r.created_at), day(r.responded_at)]) };
 }
 
-const BUILD = { students: studentsSet, grades: gradesSet, courses: coursesSet, requests: requestsSet, holds: holdsSet, complaints: complaintsSet };
+const fmtTime = (ms, tz) => (ms ? new Date(ms - tz * 60000).toISOString().replace('T', ' ').slice(0, 16) : '');
+function attendanceSet(db, f) {
+  const rows = logsForExport(db, { kind: f.akind, hall: f.ahall, course: f.acourse, state: f.astate, from: f.afrom, to: f.ato, faculty: f.faculty, tz: f.tz });
+  if (rows.length > MAX_ROWS) throw new HttpError(413, `«سجل القاعات» أكبر من ${MAX_ROWS} صف؛ ضيّق المرشحات.`, 'too_large');
+  return { id: 'attendance', title: 'سجل القاعات', textCols: [0], headers: ['الرقم الجامعي', 'اسم الطالب', 'الكلية / المعهد', 'النوع', 'المادة / الفحص', 'القاعة', 'وقت الدخول', 'وقت الخروج', 'المدة (دقيقة)', 'الطريقة', 'سجَّله', 'ملاحظة'],
+    rows: rows.map((r) => [r.studentNo, r.studentName, r.faculty, r.kindLabel, r.subject, r.hall, fmtTime(r.enteredAt, f.tz), fmtTime(r.exitedAt, f.tz), r.minutes ?? '', { barcode: 'باركود', manual: 'يدوي', import: 'استيراد' }[r.method] ?? r.method, r.recordedBy, r.note]) };
+}
+
+const BUILD = { students: studentsSet, grades: gradesSet, courses: coursesSet, requests: requestsSet, holds: holdsSet, complaints: complaintsSet, attendance: attendanceSet };
 
 export function buildSets(db, dataset, filters) {
   const ids = dataset === 'all' ? Object.keys(BUILD) : [dataset];
@@ -132,6 +144,9 @@ export function exportOptions(db) {
     academicYears: db.prepare("SELECT DISTINCT academic_year y FROM grades WHERE academic_year IS NOT NULL ORDER BY y DESC").all().map((r) => r.y),
     enrollYears: db.prepare('SELECT DISTINCT enroll_year y FROM student_profiles ORDER BY y DESC').all().map((r) => r.y),
     statuses: STATUS_LABEL,
+    halls: db.prepare('SELECT DISTINCT hall FROM hall_logs ORDER BY hall').all().map((r) => r.hall),
+    courses: db.prepare('SELECT id, name FROM courses ORDER BY name').all(),
+    hallKinds: HALL_KINDS,
   };
 }
 

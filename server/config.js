@@ -35,6 +35,18 @@ export function loadConfig(overrides = {}) {
     scryptN: Number(env.SCRYPT_N ?? 2 ** 15),
     maxAttachmentBytes: 2 * 1024 * 1024,
     signingKey: env.SIGNING_KEY || null,
+    // النسخ الاحتياطي اليومي (انظر docs/PHASE2.md): BACKUP_DIR, BACKUP_KEEP, BACKUP_HOUR (ساعة UTC), BACKUP_AUTO=0 لإيقافه، BACKUP_PASSPHRASE لتشفيره، BACKUP_PUT_URL للرفع الخارجي
+    backupDir: env.BACKUP_DIR ? abs(env.BACKUP_DIR) : null,
+    backupKeep: Number(env.BACKUP_KEEP ?? 14),
+    backupHour: Number(env.BACKUP_HOUR ?? 1),
+    backupAuto: env.BACKUP_AUTO !== '0',
+    backupPassphrase: env.BACKUP_PASSPHRASE || null,
+    backupPutUrl: env.BACKUP_PUT_URL || null,
+    backupPutAuth: env.BACKUP_PUT_AUTH || null,
+    // تنبيهات الجوال: مفاتيح VAPID (تُولَّد تلقائياً إن لم تُضبط) وخدمات دفع إضافية مسموحة
+    vapidPublic: env.VAPID_PUBLIC_KEY || null,
+    vapidPrivate: env.VAPID_PRIVATE_KEY || null,
+    pushAllowHosts: (env.PUSH_ALLOW_HOSTS || '').split(',').map((x) => x.trim()).filter(Boolean),
     ...overrides,
   };
   if (!cfg.signingKey) {

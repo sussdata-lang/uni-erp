@@ -1,4 +1,6 @@
 import { drainCertificates } from './services/enrollcert.js';
+import { drainPush } from './services/push.js';
+import { startBackupScheduler } from './services/backup.js';
 import http from 'node:http';
 import { loadConfig } from './config.js';
 import { openDb } from './db.js';
@@ -17,5 +19,6 @@ export function createApp(overrides = {}) {
   // تنظيف الجلسات المنتهية كل ساعة
   const timer = setInterval(() => db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now()), 3600_000);
   timer.unref();
-  return { server, db, cfg, limiter, close: async () => { clearInterval(timer); await drainCertificates(db); await new Promise((res) => server.close(() => { db.close(); res(); })); } };
+  const stopBackups = startBackupScheduler({ db, cfg });
+  return { server, db, cfg, limiter, close: async () => { clearInterval(timer); stopBackups(); await drainCertificates(db); await drainPush(); await new Promise((res) => server.close(() => { db.close(); res(); })); } };
 }

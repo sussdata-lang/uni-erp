@@ -50,7 +50,7 @@ export function analytics(db, { faculty, year } = {}, now = new Date()) {
 
   /* --- الأكاديمي --- */
   const G = `FROM grades gr JOIN student_profiles sp ON sp.user_id = gr.student_id JOIN programs g ON g.id = sp.program_id LEFT JOIN faculties fa ON fa.id = g.faculty_id
-             WHERE (? IS NULL OR fa.id = ?) AND (? IS NULL OR sp.enroll_year = ?)`;
+             WHERE gr.workflow_status = 'approved' AND (? IS NULL OR fa.id = ?) AND (? IS NULL OR sp.enroll_year = ?)`;
   const gs = one(`SELECT COUNT(*) c, AVG(gr.mark) a, SUM(gr.mark >= ${PASS_MARK}) p ${G}`, ...SP);
   const buckets = [['أقل من 50', 0, 49], ['50 – 59', 50, 59], ['60 – 69', 60, 69], ['70 – 79', 70, 79], ['80 – 89', 80, 89], ['90 – 100', 90, 100]];
   const dist = buckets.map(([l, a, b]) => [l, one(`SELECT COUNT(*) c ${G} AND gr.mark BETWEEN ? AND ?`, ...SP, a, b).c]);
