@@ -1,5 +1,4 @@
-// استيراد الطلاب والمقررات والعلامات من Excel (xlsx) أو CSV أو SQL (جمل INSERT فقط، لا يُنفَّذ أي SQL).
-// الخطوتان: فحص (commit=false: لا يُكتب شيء) ثم اعتماد (commit=true: يُحفظ الصحيح ويُبلَّغ عن المرفوض بالصف).
+// استيراد الطلاب والمقررات والعلامات وسجل حضور القاعات بالباركود من Excel (xlsx) أو CSV أو SQL
 import { readXlsx, writeXlsx } from '../lib/xlsx.js';
 import { parseSql, parseCsv } from '../lib/sqlparse.js';
 import { tx } from '../db.js';
@@ -35,6 +34,16 @@ function columnMap(db, kind) {
     name: A('اسم المقرر', 'المقرر', 'name', 'course', 'coursename', 'title'), code: A('رمز المقرر', 'الرمز', 'code', 'coursecode'),
     hours: A('الساعات', 'عدد الساعات', 'hours', 'credits'), instructor: A('المدرس', 'مدرس المقرر', 'اسم المدرس', 'instructor', 'teacher'),
   };
+  if (kind === 'attendance') return {
+    barcode: A('الباركود', 'الرقم الجامعي', 'رقم الطالب', 'barcode', 'student_no', 'studentno'),
+    course: A('اسم المقرر', 'المقرر', 'المادة', 'course', 'coursename'),
+    course_code: A('رمز المقرر', 'الرمز', 'course_code', 'code'),
+    hall_name: A('القاعة', 'اسم القاعة', 'hall', 'hall_name', 'room'),
+    session_type: A('نوع الجلسة', 'النوع', 'الفحص/المحاضرة', 'session_type', 'type'),
+    log_date: A('التاريخ', 'تاريخ الحضور', 'date', 'log_date'),
+    entry_time: A('وقت الدخول', 'ساعة الدخول', 'entry_time', 'checkin', 'in'),
+    exit_time: A('وقت الخروج', 'ساعة الخروج', 'exit_time', 'checkout', 'out'),
+  };
   return {
     student_no: A('الرقم الجامعي', 'رقم الطالب', 'اسم المستخدم', 'student_no', 'studentno', 'username', 'studentid'),
     course: A('اسم المقرر', 'المقرر', 'course', 'coursename'), course_code: A('رمز المقرر', 'course_code', 'coursecode', 'code'),
@@ -47,11 +56,12 @@ const NEED = {
   students: [['first_name', 'الاسم الأول'], ['father_name', 'اسم الأب'], ['last_name', 'الكنية'], ['national_id', 'الرقم الوطني']],
   courses: [['name', 'اسم المقرر'], ['level', 'السنة الدراسية'], ['semester', 'الفصل']],
   grades: [['student_no', 'الرقم الجامعي'], ['academic_year', 'العام الدراسي'], ['theory', 'العلامة النظرية']],
+  attendance: [['barcode', 'الباركود / الرقم الجامعي'], ['hall_name', 'القاعة'], ['log_date', 'التاريخ']],
 };
-const KIND_TABLE = { students: /student|طالب|users?$/i, courses: /course|subject|مقرر|مواد|مادة/i, grades: /grade|mark|result|علام|درج/i };
+const KIND_TABLE = { students: /student|طالب|users?$/i, courses: /course|subject|مقرر|مواد|مادة/i, grades: /grade|mark|result|علام|درج/i, attendance: /attendance|hall|barcode|حضور|قاع|باركود/i };
 
 /* ---------- قراءة الملف إلى صفوف كائنات ---------- */
-function toObjects(db, kind, grid) {            // grid: string[][]
+function toObjects(db, kind, grid) {
   const cmap = columnMap(db, kind), rev = new Map();
   for (const [k, names] of Object.entries(cmap)) for (const n of names) if (!rev.has(n)) rev.set(n, k);
   let h = -1;
@@ -61,7 +71,7 @@ function toObjects(db, kind, grid) {            // grid: string[][]
   const miss = NEED[kind].filter(([k]) => !cols.includes(k)).map(([, l]) => l);
   if (kind === 'students' && !cols.includes('faculty') && !cols.includes('program') && !cols.includes('program_id')) miss.push('الكلية / المعهد');
   if (kind === 'courses' && !cols.includes('faculty') && !cols.includes('program')) miss.push('الكلية / المعهد');
-  if (kind === 'grades' && !cols.includes('course') && !cols.includes('course_code')) miss.push('اسم المقرر أو رمزه');
+  if ((kind === 'grades' || kind === 'attendance') && !cols.includes('course') && !cols.includes('course_code')) miss.push('اسم المقرر أو رمزه');
   if (miss.length) throw bad(`أعمدة مطلوبة غير موجودة في الملف: ${miss.join('، ')}.`);
   const rows = [];
   for (let i = h + 1; i < grid.length; i++) {
@@ -120,7 +130,7 @@ function studentInput(db, r, resolve) {
     else if (['int', 'num', 'tel', 'nid'].includes(f.type)) v = latinDigits(v);
     if (f.type === 'select' && f.options) { const o = f.options.find((x) => norm(x.v) === norm(v) || norm(x.l) === norm(v)); if (o) v = o.v; }
     if (['int', 'num'].includes(f.type) && /^\d+\.0+$/.test(v)) v = v.replace(/\.0+$/, '');
-    if (f.type === 'tel' && /^\d{9}$/.test(v)) v = `0${v}`;                       // Excel يحذف الصفر الأول
+    if (f.type === 'tel' && /^\d{9}$/.test(v)) v = `0${v}`;
     if (f.type === 'nid' && /^\d{10}$/.test(v)) v = `0${v}`;
     input[f.name] = v;
   }
@@ -154,10 +164,10 @@ async function importStudents({ db, cfg }, actor, rows, commit, ip) {
   return out;
 }
 
-/* ---------- المقررات والعلامات (يعملان داخل معاملة واحدة تُلغى في الفحص وتُعتمد عند الاستيراد) ---------- */
+/* ---------- المقررات والعلامات وسجل القاعات بالباركود ---------- */
 const semesterOf = (v) => { v = norm(latinDigits(v)); return /^(1|الاول|اول)$/.test(v) || v.includes('الاول') ? 1 : /^(2|الثاني|ثاني)$/.test(v) || v.includes('الثاني') ? 2 : null; };
 class Rollback extends Error {}
-function inTx(db, commit, fn) {                    // متزامنة بالكامل: لا يتداخل معها طلب آخر؛ الفحص يُلغي كل ما كتبته
+function inTx(db, commit, fn) {
   let r;
   try { tx(db, () => { r = fn(); if (!commit) throw new Rollback(); }); } catch (e) { if (!(e instanceof Rollback)) throw e; }
   return r;
@@ -205,7 +215,36 @@ function importGrades({ db }, actor, rows, commit, ip) {
   return { total: rows.length, valid: res.done, created: commit ? res.done - res.updated : 0, updated: commit ? res.updated : 0, preview: rows.slice(0, 8).map((r) => `${r.student_no} — ${r.course || r.course_code}`), errors };
 }
 
-export const IMPORT_PERM = { students: 'student:register', courses: 'course:manage', grades: 'grade:manage' };
+function importAttendance({ db }, actor, rows, commit, ip) {
+  const errors = [];
+  const res = inTx(db, commit, () => perRow(rows, errors, (r) => {
+    const bc = String(r.barcode ?? '').trim();
+    const st = db.prepare("SELECT u.id, u.student_no, p.program_id FROM users u JOIN student_profiles p ON p.user_id = u.id WHERE u.student_no = ? COLLATE NOCASE OR p.barcode = ? COLLATE NOCASE").get(bc, bc);
+    if (!st) throw bad(`لا يوجد طالب بالباركود أو الرقم الجامعي «${bc}».`);
+    let cs = db.prepare('SELECT id, name, code FROM courses WHERE program_id = ?').all(st.program_id);
+    if (r.course_code) cs = cs.filter((c) => c.code && norm(c.code) === norm(r.course_code)); else cs = cs.filter((c) => norm(c.name) === norm(r.course));
+    if (!cs.length) throw bad(`المقرر «${r.course_code || r.course}» غير موجود في برنامج الطالب.`);
+    const dt = normDate(r.log_date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dt)) throw bad(`التاريخ «${r.log_date}» غير صالح (استخدم YYYY-MM-DD).`);
+    const hall = String(r.hall_name ?? '').trim(); if (!hall) throw bad('اسم القاعة مطلوب.');
+    const sType = /فحص|امتحان|exam/i.test(String(r.session_type ?? '')) ? 'exam' : 'lecture';
+    const parseTime = (t, def) => {
+      if (!t) return def;
+      const m = /^(\d{1,2}):(\d{2})/.exec(latinDigits(t).trim());
+      return m ? Date.parse(`${dt}T${m[1].padStart(2, '0')}:${m[2]}:00Z`) : def;
+    };
+    const entryMs = parseTime(r.entry_time, Date.parse(`${dt}T08:00:00Z`));
+    const exitMs = r.exit_time ? parseTime(r.exit_time, entryMs + 3600000) : null;
+    const mins = exitMs && exitMs > entryMs ? Math.round((exitMs - entryMs) / 60000) : null;
+    db.prepare(`INSERT INTO hall_attendance_logs (student_id, student_no, barcode, course_id, hall_name, session_type, log_date, entry_time, exit_time, duration_minutes, recorded_by)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(st.id, st.student_no, bc, cs[0].id, hall, sType, dt, entryMs, exitMs, mins, actor.id);
+    return 'created';
+  }));
+  if (commit) audit(db, actor, `استيراد سجل قاعات وباركود: ${res.done} حركة`, '', ip);
+  return { total: rows.length, valid: res.done, created: commit ? res.done : 0, updated: 0, preview: rows.slice(0, 8).map((r) => `${r.barcode} — ${r.hall_name} (${r.log_date})`), errors };
+}
+
+export const IMPORT_PERM = { students: 'student:register', courses: 'course:manage', grades: 'grade:manage', attendance: 'course:manage' };
 
 export async function runImport(deps, actor, kind, { filename, data, commit }, ip) {
   if (!IMPORT_PERM[kind]) throw new HttpError(404, 'نوع استيراد غير معروف.', 'not_found');
@@ -214,7 +253,10 @@ export async function runImport(deps, actor, kind, { filename, data, commit }, i
   const { rows, unused } = readUpload(db, kind, filename, buf);
   if (!rows.length) throw bad('الملف لا يحوي صفوف بيانات تحت العناوين.');
   if (rows.length > 20000) throw bad('عدد الصفوف يتجاوز 20000.');
-  const out = kind === 'students' ? await importStudents(deps, actor, rows, !!commit, ip) : kind === 'courses' ? importCourses(deps, actor, rows, !!commit, ip) : importGrades(deps, actor, rows, !!commit, ip);
+  const out = kind === 'students' ? await importStudents(deps, actor, rows, !!commit, ip)
+    : kind === 'courses' ? importCourses(deps, actor, rows, !!commit, ip)
+    : kind === 'attendance' ? importAttendance(deps, actor, rows, !!commit, ip)
+    : importGrades(deps, actor, rows, !!commit, ip);
   if (commit && kind === 'students') audit(db, actor, `استيراد طلاب: ${out.created} مسجَّل / ${out.errors.length} مرفوض`, String(filename).slice(0, 80), ip);
   return { kind, committed: !!commit, filename, unusedColumns: unused, ...out, errors: out.errors.sort((a, b) => a.row - b.row).slice(0, 300), errorCount: out.errors.length };
 }

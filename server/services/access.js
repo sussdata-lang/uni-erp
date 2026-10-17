@@ -55,7 +55,7 @@ export function updateRole({ db }, actor, key, input, ip) {
   const permsChanged = JSON.stringify(perms) !== r.permissions_json || active !== r.active;
   tx(db, () => {
     db.prepare('UPDATE roles SET label = ?, description = ?, permissions_json = ?, active = ? WHERE key = ?').run(label, description, JSON.stringify(perms), active, r.key);
-    if (permsChanged) db.prepare('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role_key = ?)').run(r.key);   // يعيدون الدخول بالصلاحيات الجديدة
+    if (permsChanged) db.prepare('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role_key = ?)').run(r.key);
     audit(db, actor, `تعديل دور: ${label}${active !== r.active ? (active ? ' (تفعيل)' : ' (تعطيل)') : ''}`, r.key, ip);
   });
   return { ok: true };
@@ -153,6 +153,139 @@ export function deleteLink({ db }, actor, id, ip) {
   if (!l) throw new HttpError(404, 'الرابط غير موجود.', 'not_found');
   tx(db, () => { db.prepare('DELETE FROM unit_links WHERE id = ?').run(l.id); audit(db, actor, 'حذف رابط بين وحدتين', `${l.from_unit}-${l.to_unit}`, ip); });
   return { ok: true };
+}
+
+/* ---------------- البند 10 و11: جدول الدوام والامتحانات، كشف التعارض، وسجل دخول وخروج القاعات بالباركود ---------------- */
+const overlap = (s1, e1, s2, e2) => s1 < e2 && s2 < e1;
+const DAYS_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+export function detectScheduleConflicts(db, studentId) {
+  const sp = db.prepare('SELECT program_id, study_level FROM student_profiles WHERE user_id = ?').get(Number(studentId));
+  if (!sp) return { schedules: [], conflicts: [] };
+  let schedules = [];
+  try {
+    schedules = db.prepare(`
+      SELECT cs.*, c.name AS course_name, c.code AS course_code
+      FROM course_schedules cs JOIN courses c ON c.id = cs.course_id
+      WHERE cs.program_id = ? AND cs.level <= ?
+      ORDER BY cs.session_type, cs.exam_date, cs.day_of_week, cs.start_time
+    `).all(sp.program_id, sp.study_level);
+  } catch { return { schedules: [], conflicts: [] }; }
+
+  const conflicts = [];
+  for (let i = 0; i < schedules.length; i++) {
+    for (let j = i + 1; j < schedules.length; j++) {
+      const a = schedules[i], b = schedules[j];
+      if (a.course_id === b.course_id || a.session_type !== b.session_type) continue;
+      if (a.session_type === 'lecture' && a.day_of_week === b.day_of_week && overlap(a.start_time, a.end_time, b.start_time, b.end_time)) {
+        conflicts.push({
+          type: 'lecture',
+          day: DAYS_AR[a.day_of_week] || a.day_of_week,
+          courseA: a.course_name, courseB: b.course_name,
+          time: `${a.start_time} - ${a.end_time}`,
+          message: `تعارض في جدول الدوام (${DAYS_AR[a.day_of_week] || ''}) بين «${a.course_name}» و«${b.course_name}» (${a.start_time}–${a.end_time})`,
+        });
+      }
+      if (a.session_type === 'exam' && a.exam_date && a.exam_date === b.exam_date && overlap(a.start_time, a.end_time, b.start_time, b.end_time)) {
+        conflicts.push({
+          type: 'exam',
+          date: a.exam_date,
+          courseA: a.course_name, courseB: b.course_name,
+          time: `${a.start_time} - ${a.end_time}`,
+          message: `تعارض امتحاني بتاريخ ${a.exam_date} بين «${a.course_name}» و«${b.course_name}» (${a.start_time}–${a.end_time})`,
+        });
+      }
+    }
+  }
+  return { schedules, conflicts };
+}
+
+export function getStudentAttendanceSummary(db, studentId) {
+  const sp = db.prepare('SELECT program_id, study_level FROM student_profiles WHERE user_id = ?').get(Number(studentId));
+  if (!sp) return [];
+  const courses = db.prepare('SELECT id, name, code, level, semester FROM courses WHERE program_id = ? AND level = ? AND active = 1').all(sp.program_id, sp.study_level);
+  return courses.map((c) => {
+    let planned = 15, minPct = 75.0, attended = 0;
+    try {
+      const sch = db.prepare("SELECT MAX(total_planned_sessions) p, MAX(min_attendance_pct) m FROM course_schedules WHERE course_id = ? AND session_type = 'lecture'").get(c.id);
+      if (sch?.p) planned = sch.p;
+      if (sch?.m) minPct = sch.m;
+      attended = db.prepare("SELECT COUNT(DISTINCT log_date) n FROM hall_attendance_logs WHERE student_id = ? AND course_id = ? AND session_type = 'lecture'").get(Number(studentId), c.id)?.n || 0;
+    } catch { /* ignore */ }
+    const pct = Math.min(100, Math.round((attended / Math.max(1, planned)) * 1000) / 10);
+    const allowed = pct >= minPct;
+    return {
+      courseId: c.id, courseName: c.name, courseCode: c.code,
+      attendedSessions: attended, plannedSessions: planned, absentSessions: Math.max(0, planned - attended),
+      attendancePct: pct, requiredPct: minPct, allowedToEnterExam: allowed,
+      statusLabel: allowed ? 'مسموح بدخول الامتحان' : 'محروم من الامتحان لتجاوز نسبة الغياب',
+    };
+  });
+}
+
+export function scanHallBarcode({ db }, actor, input, ip) {
+  const barcode = clean(input?.barcode, 2, 40, 'الباركود / الرقم الجامعي');
+  const courseId = Number(input?.courseId);
+  const hallName = clean(input?.hallName, 1, 60, 'اسم القاعة');
+  const sessionType = input?.sessionType === 'exam' ? 'exam' : 'lecture';
+  const st = db.prepare(`SELECT u.id, u.student_no, sp.first_name, sp.father_name, sp.last_name FROM users u JOIN student_profiles sp ON sp.user_id = u.id WHERE u.student_no = ? COLLATE NOCASE OR sp.barcode = ? COLLATE NOCASE`).get(barcode, barcode);
+  if (!st) throw new HttpError(404, `لا يوجد طالب مسجل بالباركود أو الرقم الجامعي «${barcode}».`, 'not_found');
+  const course = db.prepare('SELECT id, name, code FROM courses WHERE id = ?').get(courseId);
+  if (!course) throw bad('المقرر المحدد غير موجود.');
+
+  // البند 11: منع دخول الامتحان تلقائياً إذا كانت نسبة الحضور أقل من الحد الأدنى المسموح
+  if (sessionType === 'exam' && !input?.forceAllow) {
+    const sum = getStudentAttendanceSummary(db, st.id).find((x) => x.courseId === course.id);
+    if (sum && !sum.allowedToEnterExam) {
+      throw new HttpError(403, `منع دخول القاعة الامتحانية: الطالب «${st.first_name} ${st.last_name}» محروم في مقرر «${course.name}» لأن نسبة حضوره (${sum.attendancePct}%) أقل من الحد الأدنى المطلوب (${sum.requiredPct}%).`, 'exam_banned_by_attendance');
+    }
+  }
+
+  const logDate = input?.logDate && /^\d{4}-\d{2}-\d{2}$/.test(input.logDate) ? input.logDate : new Date().toISOString().slice(0, 10);
+  const now = Date.now();
+  return tx(db, () => {
+    const open = db.prepare('SELECT * FROM hall_attendance_logs WHERE student_id = ? AND course_id = ? AND log_date = ? AND exit_time IS NULL').get(st.id, course.id, logDate);
+    if (open) {
+      const mins = Math.max(1, Math.round((now - open.entry_time) / 60000));
+      db.prepare('UPDATE hall_attendance_logs SET exit_time = ?, duration_minutes = ? WHERE id = ?').run(now, mins, open.id);
+      audit(db, actor, `خروج طالب من قاعة (${hallName})`, `${st.student_no} / ${course.name}`, ip);
+      return { action: 'exit', studentNo: st.student_no, studentName: `${st.first_name} ${st.father_name} ${st.last_name}`, course: course.name, hallName, durationMinutes: mins, timestamp: now };
+    }
+    const id = Number(db.prepare(`INSERT INTO hall_attendance_logs (student_id, student_no, barcode, course_id, hall_name, session_type, log_date, entry_time, recorded_by)
+      VALUES (?,?,?,?,?,?,?,?,?)`).run(st.id, st.student_no, barcode, course.id, hallName, sessionType, logDate, now, actor?.id ?? null).lastInsertRowid);
+    audit(db, actor, `دخول طالب إلى قاعة (${hallName})`, `${st.student_no} / ${course.name}`, ip);
+    return { id, action: 'entry', studentNo: st.student_no, studentName: `${st.first_name} ${st.father_name} ${st.last_name}`, course: course.name, hallName, timestamp: now };
+  });
+}
+
+export function listAttendanceLogs({ db }, q = {}) {
+  const where = [], args = [];
+  if (q.q) {
+    const l = `%${String(q.q).trim()}%`;
+    where.push('(l.student_no LIKE ? OR l.barcode LIKE ? OR l.hall_name LIKE ? OR c.name LIKE ?)');
+    args.push(l, l, l, l);
+  }
+  if (Number(q.courseId) > 0) { where.push('l.course_id = ?'); args.push(Number(q.courseId)); }
+  if (q.sessionType === 'lecture' || q.sessionType === 'exam') { where.push('l.session_type = ?'); args.push(q.sessionType); }
+  if (q.fromDate) { where.push('l.log_date >= ?'); args.push(String(q.fromDate)); }
+  if (q.toDate) { where.push('l.log_date <= ?'); args.push(String(q.toDate)); }
+  const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const rows = db.prepare(`
+    SELECT l.*, sp.first_name, sp.father_name, sp.last_name, c.name AS course_name, c.code AS course_code
+    FROM hall_attendance_logs l
+    LEFT JOIN student_profiles sp ON sp.user_id = l.student_id
+    LEFT JOIN courses c ON c.id = l.course_id
+    ${W} ORDER BY l.log_date DESC, l.entry_time DESC LIMIT 500
+  `).all(...args);
+  return {
+    logs: rows.map((r) => ({
+      id: r.id, studentId: r.student_id, studentNo: r.student_no, barcode: r.barcode,
+      studentName: [r.first_name, r.father_name, r.last_name].filter(Boolean).join(' ') || r.student_no,
+      courseId: r.course_id, courseName: r.course_name || '—', courseCode: r.course_code || '',
+      hallName: r.hall_name, sessionType: r.session_type, sessionLabel: r.session_type === 'exam' ? 'امتحان' : 'محاضرة',
+      logDate: r.log_date, entryTime: r.entry_time, exitTime: r.exit_time, durationMinutes: r.duration_minutes,
+    })),
+  };
 }
 
 export const overview = (db) => ({ catalog: PERMISSION_CATALOG, roles: listRoles(db), ...listUnits(db) });

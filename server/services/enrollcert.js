@@ -13,7 +13,7 @@ const rnd = (n) => Array.from(crypto.randomBytes(n), (b) => ALPHA[b % ALPHA.leng
 const maskName = (n) => { const p = n.split(' '); return p[0] + (p[1] ? ` ${p[1][0]}.` : ''); };
 const TERMS = (t) => t;
 const identities = new WeakMap(), jobs = new WeakMap();
-const identityOf = (cfg) => { let id = identities.get(cfg); if (!id) identities.set(cfg, (id = loadIdentity(cfg))); return id; };
+export const identityOf = (cfg) => { let id = identities.get(cfg); if (!id) identities.set(cfg, (id = loadIdentity(cfg))); return id; };
 export const certDir = (cfg) => path.join(cfg.uploadDir, 'certs');
 export const publicBase = (cfg) => (cfg.publicUrl ?? `http://localhost:${cfg.port ?? 3000}`).replace(/\/$/, '');
 

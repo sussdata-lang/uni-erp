@@ -35,3 +35,17 @@ export function saveSite({ db, cfg }, actor, input, ip) {
   });
   return getSite({ db, cfg });
 }
+
+export const TRANSCRIPT_TEMPLATES = ['classic', 'modern', 'academic', 'royal'];
+export function getTranscriptTemplate(db) {
+  const v = db.prepare("SELECT value FROM site_settings WHERE key = 'transcript_template'").get()?.value;
+  return TRANSCRIPT_TEMPLATES.includes(v) ? v : 'classic';
+}
+export function setTranscriptTemplate({ db }, actor, id, ip) {
+  if (!TRANSCRIPT_TEMPLATES.includes(id)) throw new HttpError(400, 'نموذج كشف العلامات غير معروف.', 'validation');
+  tx(db, () => {
+    db.prepare("INSERT INTO site_settings (key, value) VALUES ('transcript_template', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(id);
+    audit(db, actor, 'اعتماد نموذج كشف العلامات', id, ip);
+  });
+  return id;
+}
