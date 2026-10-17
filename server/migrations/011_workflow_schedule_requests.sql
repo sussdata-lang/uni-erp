@@ -4,10 +4,10 @@ ALTER TABLE grades ADD COLUMN reviewed_by INTEGER REFERENCES users(id);
 ALTER TABLE grades ADD COLUMN reviewed_at INTEGER;
 ALTER TABLE grades ADD COLUMN approved_by INTEGER REFERENCES users(id);
 ALTER TABLE grades ADD COLUMN approved_at INTEGER;
-CREATE INDEX idx_grades_workflow ON grades(workflow_status);
+CREATE INDEX IF NOT EXISTS idx_grades_workflow ON grades(workflow_status);
 
 -- سجل تغييرات العلامات (إضافة فقط): من غيّر ماذا ولماذا
-CREATE TABLE grade_changes (
+CREATE TABLE IF NOT EXISTS grade_changes (
   id          INTEGER PRIMARY KEY,
   grade_id    INTEGER NOT NULL,
   student_id  INTEGER NOT NULL,
@@ -21,13 +21,13 @@ CREATE TABLE grade_changes (
   actor_id    INTEGER REFERENCES users(id),
   at          INTEGER NOT NULL
 );
-CREATE INDEX idx_grade_changes_grade ON grade_changes(grade_id);
-CREATE INDEX idx_grade_changes_student ON grade_changes(student_id, at);
-CREATE TRIGGER grade_changes_no_update BEFORE UPDATE ON grade_changes BEGIN SELECT RAISE(ABORT, 'grade_changes is append-only'); END;
-CREATE TRIGGER grade_changes_no_delete BEFORE DELETE ON grade_changes BEGIN SELECT RAISE(ABORT, 'grade_changes is append-only'); END;
+CREATE INDEX IF NOT EXISTS idx_grade_changes_grade ON grade_changes(grade_id);
+CREATE INDEX IF NOT EXISTS idx_grade_changes_student ON grade_changes(student_id, at);
+CREATE TRIGGER IF NOT EXISTS grade_changes_no_update BEFORE UPDATE ON grade_changes BEGIN SELECT RAISE(ABORT, 'grade_changes is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS grade_changes_no_delete BEFORE DELETE ON grade_changes BEGIN SELECT RAISE(ABORT, 'grade_changes is append-only'); END;
 
 -- جدول المحاضرات: يُستعمل لكشف تعارض مقررات الطالب (day: 0=السبت … 6=الجمعة، الدقائق من منتصف الليل)
-CREATE TABLE course_schedules (
+CREATE TABLE IF NOT EXISTS course_schedules (
   id        INTEGER PRIMARY KEY,
   course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   day       INTEGER NOT NULL CHECK (day BETWEEN 0 AND 6),
@@ -36,10 +36,10 @@ CREATE TABLE course_schedules (
   hall      TEXT,
   CHECK (end_min > start_min)
 );
-CREATE INDEX idx_course_schedules_course ON course_schedules(course_id);
+CREATE INDEX IF NOT EXISTS idx_course_schedules_course ON course_schedules(course_id);
 
 -- تفاصيل الطلبات الأكاديمية
-CREATE TABLE academic_request_details (
+CREATE TABLE IF NOT EXISTS academic_request_details (
   request_id        INTEGER PRIMARY KEY REFERENCES requests(id),
   request_category TEXT NOT NULL,
   target_program_id INTEGER REFERENCES programs(id),
@@ -51,7 +51,7 @@ CREATE TABLE academic_request_details (
   updated_at        INTEGER NOT NULL
 );
 
-INSERT INTO service_types (code,label,description,sla_hours,requires_attachment,issues_document,fields_json) VALUES
+INSERT OR IGNORE INTO service_types (code,label,description,sla_hours,requires_attachment,issues_document,fields_json) VALUES
 ('postponement','طلب تأجيل دراسة','طلب تأجيل الدراسة لفصل أو أكثر لظرف يقبله المجلس.',120,0,0,
  '[{"name":"term","label":"مدة التأجيل","type":"select","options":["فصل واحد","فصلان","سنة دراسية"],"required":true},{"name":"reason","label":"سبب التأجيل","type":"select","options":["ظرف صحي","ظرف عائلي","سفر","أخرى"],"required":true},{"name":"justification","label":"التبرير","type":"text","required":true}]'),
 ('withdrawal','طلب انسحاب','طلب الانسحاب من الدراسة.',120,0,0,
