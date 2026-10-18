@@ -1045,3 +1045,81 @@ body.sx-grouped .sub-tabs{display:none}
 :root[data-theme="dark"] .stu-sheet .sheet-bar,:root[data-theme="dark"] .rec-sheet .sheet-bar{background:var(--surface);border-color:var(--line)}
 :root[data-theme="dark"] .rec-h{color:var(--gold-ink)}
 @media print{.stu-sheet,.rec-sheet{background:#fff!important;color:#10211D!important}}
+
+/* ==== تبديل الوضع يدوياً (مولَّد من القواعد أعلاه): data-theme=dark يفرض الليلي، data-theme=light يفرض الفاتح مهما كان إعداد الجهاز ==== */
+:root[data-theme="dark"]{
+    --bg:#06201C; --surface:#0B2B25; --surface2:#103832; --line:#1E4840;
+    --fg:#EAF1EE; --muted:#9DB5AE; --accent:#D4AF5A; --accent-fg:#052A24; --accent-soft:#16372F; --gold-ink:#E2C27A;
+    --ok:#5CD08F; --ok-soft:#12311F; --warn:#F0B25A; --warn-soft:#3A2A10; --bad:#FF8A80; --bad-soft:#3D1816;
+    color-scheme:dark;
+  }
+:root[data-theme="dark"] .btn.ok{color:#06210F}
+:root[data-theme="dark"] .m-app,:root[data-theme="dark"] .m-full,:root[data-theme="dark"] .m-drawer-bd{--accent:#D4AF5A;--accent-fg:#052A24;--accent-soft:#16372F;--mline:#1E4840}
+:root[data-theme="dark"] .link,:root[data-theme="dark"] .sec-h{color:var(--gold-2)}
+:root[data-theme="dark"] .m-svc .ic{color:var(--accent-fg)}
+:root[data-theme="dark"] .m-nav button[aria-current="page"]{color:var(--gold-2)}
+:root[data-theme="dark"] .vis svg [fill="#054239"]{fill:#4DB6A0}
+:root[data-theme="dark"] .vis svg [stroke="#054239"]{stroke:#4DB6A0}
+:root[data-theme="dark"] .m-desk{--accent:#D4AF5A;--accent-fg:#052A24;--accent-soft:#16372F;--mline:#1E4840}
+:root[data-theme="dark"] svg.ic .ac{stroke:var(--gold-2,#E6CB84)}
+:root[data-theme="dark"]{
+    --t-mint-fg:#7FD6BC; --t-mint-bg:#14382F; --t-sand-fg:#E2C27A; --t-sand-bg:#3A2F14;
+    --t-blue-fg:#8CC3DD; --t-blue-bg:#12303C; --t-lav-fg:#B9AEE0; --t-lav-bg:#2A2542; --sx-shadow:none;
+  }
+:root[data-theme="dark"] .tf-bar .tf-in{background:var(--surface2);color:var(--fg);border-color:var(--line)}
+:root[data-theme="dark"] .tf-bar .tf-count{color:var(--muted)}
+@media (prefers-color-scheme: dark){
+:root[data-theme="light"]{
+  --bg:#F4F6F4; --line:#E5E9E6; --muted:#77817D; --fg:#17231F; --accent:#0D5D4E; --accent-soft:#E4F0EC;
+  --t-mint-fg:#14715E; --t-mint-bg:#E5F2ED; --t-sand-fg:#99752C; --t-sand-bg:#F6EEDC;
+  --t-blue-fg:#427192; --t-blue-bg:#E8F0F5; --t-lav-fg:#755E91; --t-lav-bg:#EEEAF4; --sx-shadow:0 2px 8px rgba(29,58,48,.025);
+}
+:root[data-theme="light"] .sx-side{background:radial-gradient(circle at 0 0,rgba(201,165,80,.1),transparent 35%),linear-gradient(180deg,#073F36,#062F29)}
+:root[data-theme="light"] .sx-navlabel{color:#95AAA4}
+:root[data-theme="light"] .sx-nav button{color:#C8D5D1}
+:root[data-theme="light"] .sx-nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+:root[data-theme="light"] .sx-nav button[aria-current="page"]{background:rgba(255,255,255,.11);color:#fff;box-shadow:inset -3px 0 #C9A550,0 6px 18px rgba(0,0,0,.18)}
+:root[data-theme="light"] .sx-nav button[aria-current="page"] svg{color:#E0C06C}
+:root[data-theme="light"] .sx-nav button small{color:#123C34;background:#DFC46F;font-weight:800}
+:root[data-theme="light"] .sx-help{border-color:rgba(255,255,255,.11);background:rgba(255,255,255,.055)}
+:root[data-theme="light"] .sx-help i{color:#E1C36D;background:rgba(201,165,80,.14)}
+:root[data-theme="light"] .sx-help p,:root[data-theme="light"] .sx-state{color:#AEBFBA}
+:root[data-theme="light"] .sx-help button{color:#E1C36D}
+:root[data-theme="light"] .sx-state{justify-content:center;padding-top:14px}
+:root[data-theme="light"] .sx-sub-list::before{background:rgba(255,255,255,.14)}
+:root[data-theme="light"] .sx-top{background:rgba(255,255,255,.94)}
+:root[data-theme="light"] .sx-ib{border:1px solid var(--line);background:#fff;color:#58625E}
+:root[data-theme="light"] .sx-ib:hover{color:#0D5D4E;border-color:#BFD0CA;background:#fff}
+:root[data-theme="light"] .sx-ib.sx-close{background:transparent;border-color:rgba(255,255,255,.2);color:#fff}
+:root[data-theme="light"] .sx-dot{background:#D49E2F;border-color:#fff}
+:root[data-theme="light"] .sx-av{background:#0D5D4E}
+:root[data-theme="light"] .sx-search{background:#F8FAF8;width:min(440px,38vw)}
+:root[data-theme="light"] .sx-eyebrow{color:#A1843D}
+:root[data-theme="light"] .sx-hero h1{color:#143B31}
+:root[data-theme="light"] .sx-hero p{color:#77817D}
+:root[data-theme="light"] .sx-btn{background:#0D5D4E;filter:none;box-shadow:0 7px 18px rgba(13,93,78,.15)}
+:root[data-theme="light"] .sx-btn:hover{background:#0A4A3F;filter:none}
+:root[data-theme="light"] .sx-stat .cp strong{color:#1B332B}
+:root[data-theme="light"] .sx-stat .mt>div{background:#EDF0EE}
+:root[data-theme="light"] .sx-stat .mt i{background:#0D5D4E}
+:root[data-theme="light"] .sx-ph h2{color:#263B34}
+:root[data-theme="light"] .sx-track i{background:#D5E5DF}
+:root[data-theme="light"] .sx-col:hover .sx-track i{background:#0D5D4E}
+:root[data-theme="light"] .sx-table th{background:#FAFBFA;color:#8B9591;border-color:#EEF1EF}
+:root[data-theme="light"] .sx-table td{border-color:#F0F2F1}
+:root[data-theme="light"] .sx-table tbody tr:hover{background:#FBFCFB}
+:root[data-theme="light"] .sx-sc>span{background:#E3EFEB;color:#2C6C5D}
+:root[data-theme="light"] .p-review{background:#F8F0DE;color:#927027}
+:root[data-theme="light"] .p-approved{background:#E4F1ED;color:#18705D}
+:root[data-theme="light"] .p-rejected{background:#F7E9E7;color:#A54F49}
+:root[data-theme="light"] .sx-go{border:1px solid var(--line);border-radius:7px;background:#fff;color:#65716D;width:27px;height:27px}
+/* الصفحات الداخلية على نفس الروح */
+:root[data-theme="light"] .btn.pri{background:#0D5D4E;border-color:#0D5D4E;color:#fff}
+:root[data-theme="light"] .btn.pri:hover{background:#0A4A3F;filter:none}
+:root[data-theme="light"] .card{border-color:var(--line);box-shadow:0 2px 8px rgba(29,58,48,.025)}
+:root[data-theme="light"] th{background:#FAFBFA;color:#8B9591}
+:root[data-theme="light"] .sub-tabs{background:#fff;border:1px solid var(--line);border-radius:9px;padding:4px;width:fit-content;max-width:100%;overflow-x:auto}
+:root[data-theme="light"] .sub-tabs .chip{border:0;border-radius:6px;background:transparent;color:#71807A;padding:6px 13px;font-size:12px}
+:root[data-theme="light"] .sub-tabs .chip[aria-pressed="true"]{background:#0D5D4E;color:#fff}
+:root[data-theme="light"] .filters,:root[data-theme="light"] .tf-bar{background:#FAFBFA}
+}

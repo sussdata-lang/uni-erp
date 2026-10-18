@@ -212,6 +212,7 @@
           <div class="sx-crumbs"><span>${esc(o.root || 'نظام إدارة الجامعة')}</span>${ico('chevron', 15)}<strong>${esc(label)}</strong></div>
           ${search}
           <div class="sx-actions">
+            ${window.UAtheme ? window.UAtheme.button() : ''}
             <div class="sx-wrap"><button class="sx-ib" data-sx="notif" aria-label="الإشعارات">${ico('bell')}${review ? '<i class="sx-dot"></i>' : ''}</button>
               <div class="sx-pop" id="sx-notif" hidden><strong>الإشعارات</strong>${notifBody}${UA.push ? UA.push.panel() : ''}</div></div>
             <div class="sx-sep"></div>
