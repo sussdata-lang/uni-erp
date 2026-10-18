@@ -84,7 +84,7 @@ test('البثّ: يلزم تسجيل الدخول، النوع صحيح، Range
   assert.deepEqual(part.buf, MP4.subarray(10, 100));
   assert.equal((await api('GET', `/api/media/${mid}`, { cookie: stu, headers: { Range: 'bytes=99999-' } })).status, 416);
   assert.equal((await api('GET', '/api/media/424242', { cookie: stu })).status, 404);
-  const csp = full.headers.get('content-security-policy'); assert.match(csp, /frame-src https:\/\/www\.youtube-nocookie\.com/); assert.match(csp, /img-src 'self' data: https:/);
+  const csp = full.headers.get('content-security-policy'); assert.match(csp, /frame-src https:\/\/www\.youtube-nocookie\.com/); assert.match(csp, /img-src 'self' data: blob: https:/);
 });
 
 test('الحذف: حذف وسيط وحذف الخبر يزيلان الملفات والصفوف', async () => {

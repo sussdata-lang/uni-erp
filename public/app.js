@@ -236,7 +236,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
   function attachmentsSection(n, edit) {
     const rows = ATT.map(([k, title, ic, hint, multi]) => `<div class="att"><span class="att-ic" aria-hidden="true">${UA.icon(ic, 30)}</span><div class="att-b"><b>${title}</b><span class="small">${hint}</span>
-      ${edit ? filesList(S.stFiles, k, true) : ''}<input type="file" id="att-${k}"${multi ? ' multiple' : ''} accept="${k === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,image/gif,application/pdf'}"></div></div>`).join('');
+      ${edit ? filesList(S.stFiles, k, true) : ''}${k === 'photo' ? '<button type="button" class="btn sm" data-act="formcam" style="margin-inline-end:8px">تصوير بالكاميرا</button><span class="small" id="formcam-msg"></span> ' : ''}<input type="file" id="att-${k}"${multi ? ' multiple' : ''} accept="${k === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,image/gif,application/pdf'}"></div></div>`).join('');
     return `<fieldset class="sec"><legend><span class="n">${n}</span>المرفقات</legend><div class="att-grid">${rows}</div><p class="small" style="margin:8px 0 0">المرفقات اختيارية، وتُرفع بعد حفظ بيانات الطالب. يمكن إضافتها أو حذفها لاحقاً من «تعديل».</p></fieldset>`;
   }
   async function uploadAttachments(studentId) {
@@ -256,9 +256,10 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
   function credCard() {
     const c = S.cred; if (!c) return '';
-    return `<section class="card cred" id="credcard"><h2>تم تسجيل الطالب</h2><p class="hint" style="margin-top:0"><b>${esc(c.name)}</b> — سلِّم هذه البيانات للطالب الآن. كلمة المرور المؤقتة تُعرض مرة واحدة فقط، وسيُطلب منه تغييرها عند أول دخول.</p>
-      ${c.att && (c.att.n || c.att.fails.length) ? `<p class="hint">رُفع ${c.att.n} مرفق${c.att.fails.length ? ` — تعذّر رفع: ${esc(c.att.fails.join(' | '))} (أضِفها من «تعديل»)` : ''}.</p>` : ''}<dl class="kv big"><dt>الرقم الجامعي (اسم المستخدم)</dt><dd class="mono" dir="ltr">${esc(c.username)}</dd><dt>كلمة المرور المؤقتة</dt><dd class="mono" dir="ltr">${esc(c.tempPassword)}</dd></dl>
-      <div class="actions no-print"><button class="btn pri" data-act="credcopy">نسخ</button><button class="btn" data-act="credprint">طباعة</button><button class="btn" data-act="credopen">فتح ملف الطالب</button><button class="btn" data-act="crednew">تسجيل طالب آخر</button></div></section>`;
+    const att = c.att && (c.att.n || c.att.fails.length) ? `<p class="hint">رُفع ${c.att.n} مرفق${c.att.fails.length ? ` — تعذّر رفع: ${esc(c.att.fails.join(' | '))} (أضِفها من «تعديل»)` : ''}.</p>` : '';
+    return `<section class="card cred" id="credwrap"><h2>تم تسجيل الطالب</h2><p class="hint" style="margin-top:0">سلِّم هذه البطاقة للطالب الآن: فيها الباركود واسم المستخدم وكلمة المرور المؤقتة.</p>${att}
+      ${UA.idCard ? UA.idCard({ name: c.name, studentNo: c.username, program: c.program, levelLabel: c.level }, { cred: c, files: c.files }) : `<dl class="kv big"><dt>اسم المستخدم</dt><dd class="mono" dir="ltr">${esc(c.username)}</dd><dt>كلمة المرور المؤقتة</dt><dd class="mono" dir="ltr">${esc(c.tempPassword)}</dd></dl>`}
+      <div class="actions no-print" style="margin-top:14px"><button class="btn pri" data-act="credprint">طباعة البطاقة</button><button class="btn" data-act="credcopy">نسخ البيانات</button><button class="btn" data-act="credopen">فتح ملف الطالب</button><button class="btn" data-act="crednew">تسجيل طالب آخر</button></div></section>`;
   }
   function studentsView() {
     if (!S.reg) return '<div class="empty">جارٍ التحميل…</div>';
@@ -297,7 +298,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     return '<h3 class="sec-h">المرفقات</h3>' + ATT.map(([k, t]) => { const l = filesList(f, k, false); return l ? `<b class="small">${t}</b>${l}` : ''; }).join('');
   }
   function studentDetail(st) {
-    return `<div class="me"><div class="avatar">${esc(st.name[0])}</div><div><b>${esc(st.name)}</b><small class="mono">${esc(st.studentNo)}</small></div></div>
+    return `<div class="me st-top">${UA.photoBox ? UA.photoBox(st) : `<div class="avatar">${esc(st.name[0])}</div>`}<div><b>${esc(st.name)}</b><small class="mono">${esc(st.studentNo)}</small></div></div>
       <div style="margin:8px 0">${spill(st.status, st.statusLabel)} ${st.activeHolds ? `<span class="pill p-rejected">${st.activeHolds} عقوبة قائمة</span>` : ''}</div>
       <div class="actions no-print"><button class="btn pri sm" data-act="stedit">تعديل</button><button class="btn sm" data-act="stpw">إعادة تعيين كلمة المرور</button><button class="btn sm" data-act="stcert">شهادة التسجيل الموقَّعة (PDF)</button>${can('student:delete') ? '<button class="btn sm bad" data-act="stdel">حذف الطالب</button>' : ''}</div>${S.stCert ? `<p class="small">رمز التحقق <span class="mono" dir="ltr">${esc(S.stCert.code)}</span> · ${S.stCert.tsaStatus === 'rfc3161' ? 'ختم زمني موثوق' : S.stCert.tsaStatus === 'failed' ? 'تعذّر الختم الموثوق' : 'ختم زمني محلي'} · بصمة <span class="mono" dir="ltr">${esc(S.stCert.pdfSha256.slice(0, 16))}…</span>${S.stCert.selfSigned ? ' · شهادة ذاتية' : ''}</p>` : ''}
       ${UA.code128 ? `<div class="bc-card" id="bccard"><b>${esc(st.name)}</b><div class="bc-box">${UA.code128(st.studentNo)}</div><span class="mono" dir="ltr">${esc(st.studentNo)}</span><button class="btn sm no-print" data-act="bcprint">طباعة بطاقة الباركود</button></div>` : ''}${relatedRequests(st)}${profileKv(st)}${attDetail()}<p class="small">سُجِّل ${fmt(st.createdAt)} · آخر تعديل ${fmt(st.updatedAt)}</p>`;
@@ -349,7 +350,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   const BUILTIN = { affairs: affairsView, admin: adminView, audit: auditView };
   function render() {
     const app = $('#app');
-    document.body.classList.remove('sx-on', 'sx-drawer');
+    document.body.classList.remove('sx-on', 'sx-drawer', 'sx-grouped');
     // واجهة الجوال (شريط سفلي وبطاقات) تُعرض فقط للطالب على شاشة صغيرة؛ على الحاسوب تُعرض واجهة سطح المكتب لكل الأدوار
     document.body.classList.remove('is-m');                       // لا شريط سفلي: الجوال يستخدم القائمة الجانبية نفسها
     if (!S.me && S.view !== 'verify') { app.innerHTML = loginView() + siteFoot(); return; }
@@ -433,7 +434,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
           } else {
             const r = await api('POST', '/api/students', body);
             const up = await uploadAttachments(r.student.id);
-            S.cred = { ...r.credentials, name: r.student.name, id: r.student.id, att: up }; S.newVals = {}; S.err = ''; S.fieldErr = null; render(); window.scrollTo(0, 0);
+            S.cred = { ...r.credentials, name: r.student.name, id: r.student.id, att: up, program: (r.student.program && (r.student.program.label || r.student.program.name)) || '', level: r.student.levelLabel || '' }; try { S.cred.files = (await api('GET', `/api/students/${r.student.id}/files`)).files; const full = (await api('GET', `/api/students/${r.student.id}`)).student; S.cred.program = (full.program && (full.program.label || full.program.name)) || S.cred.program; S.cred.level = full.levelLabel || S.cred.level; } catch { /* اختياري */ } S.newVals = {}; S.err = ''; S.fieldErr = null; render(); window.scrollTo(0, 0);
           }
         } catch (err) {
           if (!err.status) throw err;
@@ -471,7 +472,6 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
         setTimeout(() => URL.revokeObjectURL(al.href), 4000); toast('تم حفظ الوثيقة كملف PDF');
       }
       else if (a === 'docprint') { document.body.classList.add('print-doc'); window.addEventListener('afterprint', () => document.body.classList.remove('print-doc'), { once: true }); window.print(); }
-      else if (a === 'bcprint') { document.body.classList.add('print-bc'); window.addEventListener('afterprint', () => document.body.classList.remove('print-bc'), { once: true }); window.print(); }
       else if (a === 'copy') { try { await navigator.clipboard.writeText(d.c); toast('تم نسخ الرمز'); } catch { toast('الرمز: ' + d.c); } }
       else if (a === 'atab') { S.adminTab = d.t; S.edit = null; render(); }
       else if (a === 'addhold') { await api('POST', '/api/admin/holds', { studentNo: val('h-no'), holdType: val('h-type'), note: val('h-note') }); await loadFor('admin'); render(); toast('سُجّلت العقوبة'); }
@@ -528,7 +528,6 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
         S.cred = { ...r.credentials, name: S.stSel.name, id: S.stSel.id }; S.stTab = 'new'; render();
       }
       else if (a === 'credcopy') { try { await navigator.clipboard.writeText(`${S.cred.username}\n${S.cred.tempPassword}`); toast('تم النسخ'); } catch { toast('تعذّر النسخ؛ انسخ يدوياً'); } }
-      else if (a === 'credprint') { document.body.classList.add('print-cred'); window.addEventListener('afterprint', () => document.body.classList.remove('print-cred'), { once: true }); window.print(); }
       else if (a === 'credopen') { const id = S.cred.id; S.cred = null; S.stTab = 'list'; S.stSel = (await api('GET', '/api/students/' + id)).student; await loadStudents(); render(); }
       else if (a === 'crednew') { S.cred = null; S.newVals = {}; render(); }
       else if (a === 'addfac') { const r = await api('POST', '/api/admin/faculties', { name: val('fc-name'), nameEn: val('fc-en'), code: val('fc-code'), kind: val('fc-kind') }); S.reg = null; await loadFor('admin'); render(); toast('أُضيفت الجهة، رمزها ' + r.code); }

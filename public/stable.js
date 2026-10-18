@@ -114,5 +114,5 @@
     if (['stedit', 'stdel', 'strecord'].includes(a)) { modalOn = false; setTimeout(() => { const l = document.getElementById('layer'); if (l && l.querySelector('.stu-sheet')) l.innerHTML = ''; }, 0); return; }
     setTimeout(() => { if (modalOn && document.getElementById('layer')?.querySelector('.stu-sheet')) paintModal(); }, 600);
   });
-  UA.studentsTable = { view: (fn) => { detailFn = fn; return view(fn); }, load, refresh };
+  UA.studentsTable = { view: (fn) => { detailFn = fn; return view(fn); }, load, refresh, paint: () => { if (modalOn) paintModal(); } };
 })();

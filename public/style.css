@@ -905,3 +905,107 @@ body:has(.demo-bar) .sx-top{top:0}
 .sx-donut-w .sx-legend{width:auto;min-width:130px;margin-top:0;gap:12px}
 @media (max-width:640px){.sx-donut-w{flex-direction:column;gap:18px}.sx-donut-w .sx-legend{width:100%}}
 @media (max-width:900px){body .demo-bar{z-index:10}}
+
+/* ===== بطاقة الطالب والصورة والكاميرا والطباعة ===== */
+.idc{width:min(100%,430px);border:1.5px solid #C9A24B;border-radius:14px;overflow:hidden;background:#fff;color:#10211D;font-family:var(--f-ui);-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:0 6px 22px rgba(5,66,57,.1)}
+.idc-h{display:flex;align-items:center;gap:12px;padding:13px 16px;color:#fff;background:linear-gradient(135deg,#032E28,#054239 55%,#0A5A4D);border-bottom:3px solid #C9A24B}
+.idc-h img{width:40px;height:48px;flex:none;object-fit:contain;background:transparent}
+.idc-h b{display:block;font-size:15px;font-weight:800;line-height:1.4}.idc-h span{display:block;font-size:11.5px;color:#E6CB84}
+.idc-t{padding:8px 16px;background:#F2F5F2;color:#054239;font-weight:800;font-size:13px;text-align:center;border-bottom:1px solid #DCE3DD}
+.idc-b{padding:14px 16px;display:grid;gap:12px}
+.idc-who{display:flex;gap:12px;align-items:center}
+.idc-ph{width:66px;height:88px;object-fit:cover;border-radius:6px;border:1px solid #DCE3DD;flex:none}
+.idc-n{font-size:17px;font-weight:800;line-height:1.4}.idc-s{font-size:12.5px;color:#566660}
+.idc-bc{display:grid;gap:3px;justify-items:center;padding:10px;border:1px dashed #DCE3DD;border-radius:10px;background:#fff}
+.idc-bc .bc128{width:100%;max-width:300px;height:62px}
+.idc-bc span{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:700;letter-spacing:.6px}
+.idc-k{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.idc-k>div{padding:8px 10px;border-radius:8px;background:#F2F5F2;border:1px solid #DCE3DD}
+.idc-k dt{font-size:11.5px;color:#566660}.idc-k dd{margin:2px 0 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:15px;word-break:break-all}
+.idc-note{margin:0;font-size:11.5px;color:#8A6A1B}
+.idc-f{padding:7px 16px;text-align:center;font-size:11px;color:#E6CB84;background:#054239}
+.cred .idc{margin-block:4px 0}
+@media(max-width:480px){.idc-k{grid-template-columns:1fr}}
+/* صورة الطالب في أعلى سجله: مستطيلة 3:4 */
+.st-top{align-items:flex-start}
+.phb{display:grid;gap:6px;justify-items:center;flex:none}
+.phb-img{width:96px;height:128px;border-radius:8px;border:1px solid var(--line);overflow:hidden;background:var(--accent-soft);display:grid;place-items:center}
+.phb-img img{width:100%;height:100%;object-fit:cover;display:block}
+.phb-ph{font-size:38px;font-weight:800;color:var(--accent)}
+.phb-a{display:flex;gap:6px}.phb-a .btn{padding:3px 9px;font-size:12px}
+/* الكاميرا */
+.cam-sheet{width:min(440px,100%);background:var(--surface);border-radius:14px;padding:14px;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+.cam-box{position:relative;width:100%;aspect-ratio:3/4;background:#0a1512;border-radius:10px;overflow:hidden;margin:10px 0}
+.cam-box video,.cam-box img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam-box video{transform:scaleX(-1)}
+.cam-frame{position:absolute;inset:8% 14%;border:2px dashed rgba(230,203,132,.85);border-radius:10px;pointer-events:none}
+.cam-box [hidden]{display:none}
+/* طباعة عنصر واحد عبر جذر مستقل */
+#printroot{display:none}
+@media print{
+  body.print-root{background:#fff!important;padding:0!important}
+  body.print-root>*:not(#printroot){display:none!important}
+  body.print-root #printroot{display:block;padding:10mm}
+  body.print-root #printroot .idc{width:100mm;max-width:none;box-shadow:none;break-inside:avoid}
+  @page{margin:8mm}
+}
+
+/* ===== قوائم عناوين الأعمدة (ترتيب + فلترة قيم) ===== */
+th.tf-h{position:relative;padding-inline-end:28px!important}
+.grid-tbl th.tf-h{padding-inline-end:26px!important}
+.tf-dd{position:absolute;inset-inline-end:4px;top:50%;transform:translateY(-50%);width:22px;height:22px;display:grid;place-items:center;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted);font-size:11px;line-height:1;cursor:pointer}
+.tf-dd:hover,.tf-dd[aria-expanded="true"]{background:var(--accent-soft);border-color:var(--line);color:var(--accent)}
+.tf-dd.on{background:var(--gold);border-color:var(--gold);color:#1A1A1A}
+.tf-dd:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.tf-pop{position:fixed;z-index:80;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);box-shadow:0 16px 44px rgba(18,48,41,.2);display:grid;gap:8px;max-height:min(460px,calc(100vh - 24px));overflow:hidden;grid-template-rows:auto auto auto auto minmax(0,1fr) auto}
+.tf-pop-t{font-weight:800;font-size:13.5px;color:var(--accent);padding:0 2px}
+.tf-pop-s{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tf-pop-s button{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);color:var(--fg);font-size:12.5px;cursor:pointer}
+.tf-pop-s button:hover{border-color:var(--accent)}
+.tf-pop-s button[data-s="own"]{grid-column:1/-1}
+.tf-pop-q{width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:var(--surface)}
+.tf-pop-all{display:flex;gap:8px;align-items:center;font-size:12.5px;font-weight:700;padding:2px 4px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.tf-pop-l{overflow:auto;display:grid;gap:1px;align-content:start;min-height:60px}
+.tf-pop-l label,.tf-pop-all{cursor:pointer}
+.tf-pop-l label{display:flex;gap:8px;align-items:center;padding:4px;border-radius:6px;font-size:12.5px;font-weight:400}
+.tf-pop-l label:hover{background:var(--accent-soft)}
+.tf-pop-l input,.tf-pop-all input{width:auto;accent-color:var(--accent)}
+.tf-pop-l span{flex:1;min-width:0;overflow-wrap:anywhere}
+.tf-pop-l em{font-style:normal;color:var(--muted);font-size:11.5px}
+.tf-pop-n{margin:6px;color:var(--muted);font-size:12.5px}
+.tf-pop-f{display:flex;gap:6px;justify-content:space-between;padding-top:6px;border-top:1px solid var(--line)}
+.tf-pop-f button{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);font-size:12.5px;cursor:pointer}
+.tf-pop-f button.pri{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+@media print{.tf-dd,.tf-pop{display:none!important}}
+
+/* تبويبات «شؤون الطلاب» و«المواد والعلامات» صارت في القائمة الجانبية الفرعية فتُخفى هنا لتجنّب التكرار */
+body.sx-grouped .sub-tabs{display:none}
+
+/* ===== الوضع الليلي بنفس التصميم الجديد ===== */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .sx-side{background:radial-gradient(circle at 0 0,rgba(212,175,90,.1),transparent 35%),linear-gradient(180deg,#0A2B25,#071F1B)}
+  :root:not([data-theme="light"]) .sx-top{background:color-mix(in srgb,var(--surface) 94%,transparent)}
+  :root:not([data-theme="light"]) .sx-ib{border:1px solid var(--line);background:var(--surface2);color:var(--muted)}
+  :root:not([data-theme="light"]) .sx-ib.sx-close{background:transparent;border-color:rgba(255,255,255,.2);color:#fff}
+  :root:not([data-theme="light"]) .sx-av{background:#1C6B5B}
+  :root:not([data-theme="light"]) .sx-btn{background:#D4AF5A;color:#052A24;box-shadow:none}
+  :root:not([data-theme="light"]) .sx-btn:hover{background:#E2C27A}
+  :root:not([data-theme="light"]) .sx-hero h1{color:var(--fg)}
+  :root:not([data-theme="light"]) .sx-eyebrow{color:#E2C27A}
+  :root:not([data-theme="light"]) .sx-track i{background:#2E6A5C}
+  :root:not([data-theme="light"]) .sx-col:hover .sx-track i{background:#D4AF5A}
+  :root:not([data-theme="light"]) .sx-stat .mt i{background:#D4AF5A}
+  :root:not([data-theme="light"]) .sx-table th{background:var(--surface2)}
+  :root:not([data-theme="light"]) .sx-go{border:1px solid var(--line);background:var(--surface2);color:var(--muted)}
+  :root:not([data-theme="light"]) .tf-dd.on{background:#D4AF5A;color:#052A24}
+  :root:not([data-theme="light"]) .idc{background:#fff}
+}
+:root[data-theme="dark"] .sx-side{background:radial-gradient(circle at 0 0,rgba(212,175,90,.1),transparent 35%),linear-gradient(180deg,#0A2B25,#071F1B)}
+:root[data-theme="dark"] .sx-ib{border:1px solid var(--line);background:var(--surface2);color:var(--muted)}
+:root[data-theme="dark"] .sx-ib.sx-close{background:transparent;border-color:rgba(255,255,255,.2);color:#fff}
+:root[data-theme="dark"] .sx-av{background:#1C6B5B}
+:root[data-theme="dark"] .sx-btn{background:#D4AF5A;color:#052A24;box-shadow:none}
+:root[data-theme="dark"] .sx-track i{background:#2E6A5C}
+:root[data-theme="dark"] .sx-stat .mt i{background:#D4AF5A}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tf-bar .tf-in{background:var(--surface2);color:var(--fg);border-color:var(--line)}:root:not([data-theme="light"]) .tf-bar .tf-count{color:var(--muted)}}
+:root[data-theme="dark"] .tf-bar .tf-in{background:var(--surface2);color:var(--fg);border-color:var(--line)}

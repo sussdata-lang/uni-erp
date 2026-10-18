@@ -167,6 +167,7 @@
     };
     const hasGroup = !o.views && views.some((v) => v[0] === 'affairs');
     const inGroup = hasGroup && (S.view === 'affairs' || S.view === 'academics');
+    document.body.classList.toggle('sx-grouped', !!inGroup);
     const subs = () => {
       const t = S.stTab === 'edit' ? 'list' : S.stTab;
       const it = [['affairs', 'requests', can('request:decide') ? 'سجل الطلبات' : 'الطلبات']];
