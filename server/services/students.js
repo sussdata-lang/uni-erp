@@ -177,6 +177,24 @@ export function validateProfile(db, input, { current = null } = {}) {
   return out;
 }
 
+/* بيانات إضافية مفتوحة: حتى 20 زوجاً (عنوان، قيمة). تُحفظ كما هي بعد تنظيفها */
+export function cleanExtra(raw) {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) throw new HttpError(400, 'صيغة البيانات الإضافية غير صحيحة.', 'validation', 'extra');
+  const out = [];
+  for (const it of raw) {
+    const label = String(it?.label ?? '').replace(/\s+/g, ' ').trim(), value = String(it?.value ?? '').trim();
+    if (!label && !value) continue;
+    if (!label) throw new HttpError(400, 'اكتب عنواناً لكل بيان إضافي.', 'validation', 'extra');
+    if (label.length > 40 || value.length > 300) throw new HttpError(400, 'العنوان حتى 40 حرفاً والقيمة حتى 300 حرف.', 'validation', 'extra');
+    if (CTRL.test(label) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) throw new HttpError(400, 'البيانات الإضافية تحوي رموزاً غير مسموحة.', 'validation', 'extra');
+    out.push({ label, value });
+  }
+  if (out.length > 20) throw new HttpError(400, 'الحد الأقصى 20 بياناً إضافياً.', 'validation', 'extra');
+  return out;
+}
+const extraOf = (r) => { try { const a = JSON.parse(r.extra_json || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+
 /* ---------------- تعريف العرض ---------------- */
 const fullName = (p) => [p.first_name, p.father_name, p.last_name].filter(Boolean).join(' ');
 const shortName = (p) => [p.first_name, p.father_name, p.last_name].join(' ');
@@ -195,7 +213,7 @@ function view(db, r, { full = true, own = false } = {}) {
   if (!full) return base;
   const profile = {}; for (const c of COLUMNS) profile[c] = r[c];
   if (own) delete profile.notes;
-  return { ...base, profile, username: r.username, mustChangePassword: !!r.must_change_password,
+  return { ...base, profile, extra: extraOf(r), username: r.username, mustChangePassword: !!r.must_change_password,
     createdAt: r.created_at, updatedAt: r.updated_at,
     activeHolds: db.prepare('SELECT COUNT(*) c FROM student_holds WHERE student_id = ? AND active = 1').get(r.user_id).c };
 }
@@ -220,7 +238,7 @@ export function composeUser(db, p) {
 }
 
 export async function registerStudent({ db, cfg }, actor, input, ip) {
-  const p = validateProfile(db, input);
+  const p = validateProfile(db, input), extra = cleanExtra(input?.extra);
   duplicateCheck(db, p);
   const pw = tempPassword(), hash = await hashPassword(pw, cfg.scryptN);
   const { id, studentNo } = tx(db, () => {
@@ -237,6 +255,7 @@ export async function registerStudent({ db, cfg }, actor, input, ip) {
     const cols = COLUMNS;
     db.prepare(`INSERT INTO student_profiles (user_id, ${cols.join(', ')}, created_by, created_at, updated_at) VALUES (?, ${cols.map(() => '?').join(', ')}, ?, ?, ?)`)
       .run(uid, ...cols.map((c) => p[c]), actor.id, now, now);
+    if (extra && extra.length) db.prepare('UPDATE student_profiles SET extra_json = ? WHERE user_id = ?').run(JSON.stringify(extra), uid);
     audit(db, actor, 'تسجيل طالب جديد', no, ip);
     return { id: uid, studentNo: no };
   });
@@ -277,17 +296,21 @@ export function listStudents({ db }, query) {
 export function updateStudent({ db }, actor, id, input, ip) {
   const cur = db.prepare('SELECT * FROM student_profiles WHERE user_id = ?').get(Number(id));
   if (!cur) throw new HttpError(404, 'الطالب غير موجود.', 'not_found');
-  const p = validateProfile(db, input, { current: cur });
+  const p = validateProfile(db, input, { current: cur }), extra = cleanExtra(input?.extra);
   duplicateCheck(db, p, cur.user_id);
   const changed = COLUMNS.filter((c) => (cur[c] ?? null) !== (p[c] ?? null));
   tx(db, () => {
+    if (extra !== undefined && JSON.stringify(extra) !== JSON.stringify(extraOf(cur))) {
+      db.prepare('UPDATE student_profiles SET extra_json = ?, updated_at = ? WHERE user_id = ?').run(extra.length ? JSON.stringify(extra) : null, Date.now(), cur.user_id);
+      changed.push('extra');
+    }
     if (changed.length) {
       const now = Date.now(), u = composeUser(db, p);
       db.prepare(`UPDATE student_profiles SET ${COLUMNS.map((c) => `${c} = ?`).join(', ')}, updated_at = ? WHERE user_id = ?`).run(...COLUMNS.map((c) => p[c]), now, cur.user_id);
       db.prepare('UPDATE users SET display_name = ?, program = ? WHERE id = ?').run(u.display, u.program, cur.user_id);
     }
     const no = db.prepare('SELECT student_no FROM users WHERE id = ?').get(cur.user_id).student_no;
-    const labels = Object.fromEntries(allFields(sections(db)).map((f) => [f.name, f.label]));
+    const labels = { ...Object.fromEntries(allFields(sections(db)).map((f) => [f.name, f.label])), extra: 'بيانات إضافية' };
     if (changed.includes('status')) audit(db, actor, `تغيير حالة القيد: ${STATUS_LABEL[cur.status]} ← ${STATUS_LABEL[p.status]}`, no, ip);
     const rest = changed.filter((c) => c !== 'status');
     if (rest.length) audit(db, actor, `تعديل ملف طالب (${rest.map((c) => labels[c]).join('، ')})`.slice(0, 300), no, ip);   // أسماء الحقول فقط، لا القيم
@@ -518,7 +541,7 @@ export function listStudentsTable({ db }, q) {
   const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const FROM = 'FROM student_profiles p JOIN users u ON u.id = p.user_id JOIN programs g ON g.id = p.program_id';
   const sum = db.prepare(`SELECT COUNT(*) n, SUM(p.status = 'active') active, SUM(p.gender = 'ذكر') male, SUM(p.gender = 'أنثى') female ${FROM} ${W}`).get(...args);
-  const size = Math.min(100, Math.max(5, Number(q.size) || 25)), pages = Math.max(1, Math.ceil(sum.n / size)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
+  const size = Math.min(500, Math.max(5, Number(q.size) || 25)), pages = Math.max(1, Math.ceil(sum.n / size)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
   const col = TSORT[q.sort] ?? TSORT.createdAt, dir = q.dir === 'asc' ? 'ASC' : 'DESC';
   const order = col.split(', ').map((c) => `${c} ${dir}`).join(', ');
   const rows = db.prepare(`SELECT p.*, u.student_no, u.username, g.faculty, g.name AS program_name, g.degree, g.years,

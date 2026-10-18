@@ -51,7 +51,7 @@ export function detectScheduleConflicts(db, studentId) {
       if (a.course_id === b.course_id || a.day !== b.day) continue;
       const lo = Math.max(a.start_min, b.start_min), hi = Math.min(a.end_min, b.end_min);
       if (hi <= lo) continue;
-      const nm = (id) => cs.find((c) => c.id === id).name;
+      const nm = (id) => (cs.find((c) => c.id === id) || {}).name ?? '';
       conflicts.push({ semester: sem, day: a.day, dayLabel: DAYS[a.day], overlapMinutes: hi - lo,
         a: { courseId: a.course_id, course: nm(a.course_id), start: hm(a.start_min), end: hm(a.end_min), hall: a.hall ?? '' },
         b: { courseId: b.course_id, course: nm(b.course_id), start: hm(b.start_min), end: hm(b.end_min), hall: b.hall ?? '' } });

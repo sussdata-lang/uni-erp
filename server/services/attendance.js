@@ -129,7 +129,7 @@ export function listLogs({ db }, q) {
   const { W, a } = filterSql(q);
   const sum = db.prepare(`SELECT COUNT(*) n, COUNT(DISTINCT l.student_id) s, SUM(l.exited_at IS NULL) o, AVG(CASE WHEN l.exited_at IS NOT NULL THEN (l.exited_at - l.entered_at) / 60000.0 END) d
     FROM hall_logs l JOIN users u ON u.id = l.student_id LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id ${W}`).get(...a);
-  const size = Math.min(100, Math.max(5, Number(q.size) || 25)), pages = Math.max(1, Math.ceil(sum.n / size)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
+  const size = Math.min(500, Math.max(5, Number(q.size) || 25)), pages = Math.max(1, Math.ceil(sum.n / size)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
   const col = SORTS[q.sort] ?? SORTS.enteredAt, dir = q.dir === 'asc' ? 'ASC' : 'DESC';
   const rows = db.prepare(`${SEL} ${W} ORDER BY ${col.split(', ').map((c) => `${c} ${dir}`).join(', ')}, l.id DESC LIMIT ? OFFSET ?`).all(...a, size, (page - 1) * size);
   return { total: sum.n, page, pages, size, summary: { count: sum.n, students: sum.s, open: sum.o ?? 0, avgMinutes: sum.d === null ? null : Math.round(sum.d) }, rows: rows.map(view), options: logOptions(db) };

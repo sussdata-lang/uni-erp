@@ -246,7 +246,7 @@ export function listGradesTable({ db }, q) {
   const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const FROM = `FROM grades gr JOIN users u ON u.id = gr.student_id LEFT JOIN student_profiles sp ON sp.user_id = u.id LEFT JOIN programs g ON g.id = sp.program_id LEFT JOIN courses c ON c.id = gr.course_id`;
   const sum = db.prepare(`SELECT COUNT(*) n, AVG(gr.mark) a, SUM(gr.mark >= ${PASS_MARK}) p, COUNT(DISTINCT gr.student_id) s ${FROM} ${W}`).get(...args);
-  const size = Math.min(100, Math.max(5, Number(q.size) || 25)), pages = Math.max(1, Math.ceil(sum.n / size)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
+  const size = Math.min(500, Math.max(5, Number(q.size) || 25)), pages = Math.max(1, Math.ceil(sum.n / size)), page = Math.min(pages, Math.max(1, Number(q.page) || 1));
   const col = GSORT[q.sort] ?? GSORT.enteredAt, dir = q.dir === 'asc' ? 'ASC' : 'DESC';
   const rows = db.prepare(`SELECT gr.id, gr.student_id, u.student_no, sp.first_name, sp.father_name, sp.last_name, g.id program_id, g.name pname, g.faculty fname, g.faculty_id fid, gr.course_id, gr.course, c.code, gr.level, gr.semester, gr.academic_year, gr.theory_mark, gr.practical_mark, gr.mark, gr.entered_at, gr.workflow_status
     ${FROM} ${W} ORDER BY ${col} ${dir}, gr.id DESC LIMIT ? OFFSET ?`).all(...args, size, (page - 1) * size);

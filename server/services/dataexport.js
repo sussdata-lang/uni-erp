@@ -151,7 +151,7 @@ export function exportOptions(db) {
 }
 
 export function preview(db, dataset, q) {
-  const sets = buildSets(db, dataset, parseFilters(q)), limit = Math.min(Math.max(Number(q.limit) || 100, 1), 5000);
+  const sets = buildSets(db, dataset, parseFilters(q)), limit = Math.min(Math.max(Number(q.limit) || 500, 1), 5000);
   return { sets: sets.map((s) => ({ id: s.id, title: s.title, headers: s.headers, total: s.rows.length, rows: s.rows.slice(0, limit) })) };
 }
 

@@ -15,7 +15,7 @@ function safe(warnings, name, fn, fallback) {
   try { return fn(); } catch (e) {
     if (e && e.status && e.status < 500) throw e;
     console.error(`[record360] تعذّر قسم «${name}»:`, e && e.stack || e);
-    warnings.push(name); return fallback;
+    warnings.push(`${name} (${String(e && e.message || e).slice(0, 80)})`); return fallback;
   }
 }
 
@@ -39,8 +39,15 @@ export function getUnifiedStudentRecord(deps, id) {
   const hallLogs = safe(warnings, 'حضور القاعات', () => db.prepare('SELECT id, kind, subject, hall, entered_at enteredAt, exited_at exitedAt FROM hall_logs WHERE student_id = ? ORDER BY entered_at DESC LIMIT 10').all(sid), []);
   const staffGrades = safe(warnings, 'جدول العلامات', () => gradesFor(db, sid, null).grades, []);
   const scheduleConflicts = safe(warnings, 'تعارض الجداول', () => detectScheduleConflicts(db, sid), { studentId: sid, level: null, checkedCourses: 0, withoutSchedule: 0, conflicts: [] });
+  // مقررات الطالب: كل مقررات برنامجه حتى سنته الحالية مع علامته (إن وُجدت) وجدول محاضراته؛ فتظهر المواد حتى قبل إدخال أي علامة
+  const courses = safe(warnings, 'المقررات', () => {
+    const p = db.prepare('SELECT program_id, study_level FROM student_profiles WHERE user_id = ?').get(sid); if (!p) return [];
+    const cs = db.prepare('SELECT id, name, code, hours, level, semester, instructor FROM courses WHERE program_id = ? AND active = 1 AND level <= ? ORDER BY level, semester, name').all(p.program_id, p.study_level || 1);
+    const best = new Map(); for (const g of staffGrades) if (g.courseId != null) best.set(g.courseId, g);
+    return cs.map((c) => { const g = best.get(c.id); return { id: c.id, name: c.name, code: c.code || '', hours: c.hours, level: c.level, semester: c.semester, instructor: c.instructor || '', total: g ? g.total : null, passed: g ? !!g.passed : null, year: g ? g.academicYear : '' }; });
+  }, []);
   return {
-    student,
+    student, courses,
     academicSummary: { gpa: me.gpa, cohortRank: rank, cohortTotal: scored.length, earnedHours: me.earnedHours, totalHours: me.totalHours, passed: (me.summary || {}).passed || 0, failed, academicAlert },
     grades: staffGrades, requests, holds, hallLogs, scheduleConflicts, warnings,
   };

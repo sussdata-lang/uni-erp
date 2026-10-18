@@ -13,7 +13,8 @@ import { addUpload, addLink, deleteMedia, streamMedia } from './services/media.j
 import { analytics, filterOptions } from './services/analytics.js';
 import { buildReportXlsx, buildReportDocx } from './services/reports.js';
 import { documentPdf } from './services/docpdf.js';
-import { issueEnrollmentCertificate, certFor, certSummary, readCertPdf, verifyEnrollment, verifyByHash } from './services/enrollcert.js';
+import { issueEnrollmentCertificate, certFor, certSummary, readCertPdf, verifyEnrollment, verifyByHash, publicBase } from './services/enrollcert.js';
+import { qrSvg } from './qr.js';
 import { overview, createRole, updateRole, deleteRole, createUnit, updateUnit, deleteUnit, createLink, deleteLink, linkedTargets } from './services/access.js';
 import { registrationOptions, registerStudent, listStudents, listStudentsTable, getStudent, updateStudent, resetStudentPassword, myProfile, updateOwnContact, listPrograms, addProgram, toggleProgram, listFaculties, addFaculty, toggleFaculty, updateFaculty, deleteFaculty, updateProgram, deleteProgram, deleteStudent } from './services/students.js';
 import { listCourses, listGradesTable, createCourse, toggleCourse, updateCourse, deleteCourse, myGrades, gradesFor, enterGrade, deleteGrade, listNews, createNews, updateNews, deleteNews, createComplaint, listComplaints, respondComplaint, deleteComplaint } from './services/academics.js';
@@ -24,7 +25,6 @@ import { expandFields, createRequest, listRequests, getRequest, decide, forwardR
 import { getDocument, verifyPublic } from './services/documents.js';
 import { exportOptions, preview as exportPreview, renderExport } from './services/dataexport.js';
 import { audit, verifyAuditChain } from './audit.js';
-import { qrSvg } from './qr.js';
 
 const need = (ctx, perm) => { if (!ctx.user.can(perm)) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden'); };
 
@@ -139,7 +139,8 @@ export function buildRouter(deps) {
     need(c, 'student:read');
     const s = getStudent(deps, c.params.id);
     audit(db, c.user, 'عرض ملف طالب', s.studentNo, c.ip);   // الملف يحوي بيانات شخصية: القراءة نفسها تُدقَّق
-    c.json(200, { student: s, certificate: certSummary(certFor(db, s.id)) });
+    const ce = certFor(db, s.id), url = ce && `${publicBase(cfg)}/?verify=${ce.code}`;
+    c.json(200, { student: s, certificate: ce ? { ...certSummary(ce), url, qrSvg: qrSvg(url) } : null });
   });
   r.add('PUT', '/api/students/:id', (c) => { need(c, 'student:update'); c.json(200, { student: updateStudent(deps, c.user, c.params.id, c.body, c.ip) }); });
   r.add('DELETE', '/api/students/:id', (c) => { need(c, 'student:delete'); deleteStudent(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
