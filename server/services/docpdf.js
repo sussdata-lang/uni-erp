@@ -94,7 +94,7 @@ export function documentPdf(deps, user, rawCode, template) {
   const dir = path.join(cfg.uploadDir, 'docs'), file = path.join(dir, `${doc.code}${tpl ? '.' + tpl + '.v2' : ''}.pdf`);
   try { return { pdf: fs.readFileSync(file), filename: `${doc.code}${tpl ? '-' + tpl : ''}.pdf` }; } catch { /* لم يُنشأ بعد */ }
   const ident = identityOf(cfg), url = `${publicBase(cfg)}/?verify=${doc.code}`, qr = makeQr(url);
-  const raw = buildPdf({ family: tpl ? (tpl === 'academic' || tpl === 'royal' ? 'amiri' : 'cairo') : 'dejavu', title: `${doc.payload.service.label} — ${doc.payload.student.name}`, author: doc.payload.university, subject: `${doc.payload.service.label} — ${doc.payload.requestNo}`, producer: 'Uni ERP Core — SUSS', created,
+  const raw = buildPdf({ family: tpl ? (tpl === 'academic' || tpl === 'royal' ? 'amiri' : 'cairo') : 'dejavu', title: `${doc.payload.service.label} — ${doc.payload.student.name}`, author: doc.payload.university, subject: `${doc.payload.service.label} — ${doc.payload.requestNo}`, producer: 'الجامعة السورية للعلوم الأمنية', created,
     signer: { name: ident.leaf.subject.match(/CN=([^,]+)/)?.[1] ?? 'signer', reason: 'Approved student document', location: 'SY' } }, (d) => (tpl ? paintTranscript(d, doc, tpl, { url, qr, signedAt: created, signer: ident.leaf.subject.match(/CN=([^,]+)/)?.[1] ?? ident.leaf.subject }) : paint(d, doc, url, qr, ident, created)));
   const prep = prepareSigning(raw), { cms } = signDetached(ident, prep.digest, { signingTime: created }), pdf = prep.finish(cms);
   fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, pdf);

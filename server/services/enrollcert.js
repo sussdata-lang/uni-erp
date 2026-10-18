@@ -48,7 +48,7 @@ function paint(d, p, code, url, qr, signAt, ident, payloadHash) {
   kv('رمز التحقق', code, top - 16, { size: 15 });
   kv('بصمة SHA-256 لبيانات الشهادة', payloadHash.slice(0, 32), top - 54, { size: 9.5, font: 'regular' }); d.text(payloadHash.slice(32), { x: 545, y: top - 86, size: 9.5 });
   kv('وقت التوقيع', utc(signAt), top - 112);
-  kv('الموقِّع (X.509)', ident.leaf.subject.match(/CN=([^,]+)/)?.[1] ?? ident.leaf.subject, top - 150, { size: 11 });
+  kv('الموقِّع (شهادة X.509)', p.university, top - 150, { size: 12 });
   d.text('رابط التحقق', { x: 545, y: top - 184, size: 10, color: '#566660' }); d.text(url, { x: 545, y: top - 198, size: 9, color: '#10211D' });
   d.stroke(GOLD); d.line(40, 120, 555, 120, 1);
   d.text('وثيقة إلكترونية موقَّعة رقمياً بصيغة PDF/A-2b (توقيع CMS، شهادة X.509، بصمة SHA-256). أي تعديل على الملف يُبطل توقيعه.', { x: 555, y: 100, size: 9.5, color: '#566660' });
@@ -61,7 +61,7 @@ export async function issueEnrollmentCertificate({ db, cfg }, studentId, { now =
   const payload = payloadFor(db, cfg, studentId), json = JSON.stringify(payload), payloadHash = sha256(Buffer.from(json)).toString('hex');
   let code; do code = `SC-${rnd(4)}-${rnd(4)}`; while (db.prepare('SELECT 1 FROM student_certs WHERE code = ?').get(code));
   const ident = identityOf(cfg), url = `${publicBase(cfg)}/?verify=${code}`, qr = makeQr(url);
-  const raw = buildPdf({ title: `شهادة تسجيل الطالب ${payload.student.name}`, author: payload.university, subject: `شهادة تسجيل — ${payload.student.studentNo}`, producer: 'Uni ERP Core — SUSS', created: now,
+  const raw = buildPdf({ family: 'cairo', title: `شهادة تسجيل الطالب ${payload.student.name}`, author: payload.university, subject: `شهادة تسجيل — ${payload.student.studentNo}`, producer: 'الجامعة السورية للعلوم الأمنية', created: now,
     signer: { name: ident.leaf.subject.match(/CN=([^,]+)/)?.[1] ?? 'signer', reason: 'Student enrollment certificate', location: 'SY' } },
     (d) => paint(d, payload, code, url, qr, now, ident, payloadHash));
   const prep = prepareSigning(raw), first = signDetached(ident, prep.digest, { signingTime: now });

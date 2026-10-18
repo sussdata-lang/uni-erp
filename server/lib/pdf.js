@@ -89,7 +89,10 @@ export function buildPdf(opts, paint) {
   set(content, stream('', Buffer.from(allOps[0].join('\n'), 'latin1')));
   const extra = allOps.slice(1).map((o) => { const c = reserve(), pg = reserve(); set(c, stream('', Buffer.from(o.join('\n'), 'latin1'))); return { c, pg }; });
 
-  const crest = asset('crest.jpg'); set(img, Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width 400 /Height 480 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${crest.length} >>\nstream\n`, 'latin1'), crest, Buffer.from('\nendstream', 'latin1')]));
+  // الشعار بخلفية شفافة: RGB مضغوط + قناع ألفا (SMask)، فيظهر فوق الألوان الداكنة بلا إطار أبيض
+  const crestA = reserve(), flate = (n, extra, data) => Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width 400 /Height 480 ${extra} /Filter /FlateDecode /Length ${data.length} >>\nstream\n`, 'latin1'), data, Buffer.from('\nendstream', 'latin1')]);
+  set(crestA, flate(crestA, '/ColorSpace /DeviceGray /BitsPerComponent 8', asset('crest.alpha.z')));
+  set(img, flate(img, `/ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask ${crestA} 0 R`, asset('crest.rgb.z')));
   set(icc, stream('/N 3', asset('srgb.icc')));
   set(intent, `<< /Type /OutputIntent /S /GTS_PDFA1 /OutputConditionIdentifier (sRGB) /RegistryName (http://www.color.org) /Info (sRGB IEC61966-2.1) /DestOutputProfile ${icc} 0 R >>`);
 

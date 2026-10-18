@@ -29,7 +29,7 @@ export function loadConfig(overrides = {}) {
     sessionHours: Number(env.SESSION_HOURS ?? 8),
     cookieSecure: env.COOKIE_SECURE === '1',
     trustProxy: env.TRUST_PROXY === '1',
-    universityName: env.UNIVERSITY_NAME ?? 'الجامعة السورية للعلوم الأمنية',
+    universityName: /[\u0600-\u06FF]/.test(env.UNIVERSITY_NAME ?? '') ? env.UNIVERSITY_NAME : 'الجامعة السورية للعلوم الأمنية', // اسم بلا حروف عربية (مثل SUSSEDU) يُستبدل بالاسم العربي الرسمي
     publicUrl: env.PUBLIC_URL ?? null,
     tsaUrl: env.TSA_URL || null,               // خادم ختم زمني RFC 3161 (اختياري)، مثل http://timestamp.digicert.com
     scryptN: Number(env.SCRYPT_N ?? 2 ** 15),
