@@ -907,25 +907,37 @@ body:has(.demo-bar) .sx-top{top:0}
 @media (max-width:900px){body .demo-bar{z-index:10}}
 
 /* ===== بطاقة الطالب والصورة والكاميرا والطباعة ===== */
-.idc{width:min(100%,430px);border:1.5px solid #C9A24B;border-radius:14px;overflow:hidden;background:#fff;color:#10211D;font-family:var(--f-ui);-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:0 6px 22px rgba(5,66,57,.1)}
-.idc-h{display:flex;align-items:center;gap:12px;padding:13px 16px;color:#fff;background:linear-gradient(135deg,#032E28,#054239 55%,#0A5A4D);border-bottom:3px solid #C9A24B}
-.idc-h img{width:40px;height:48px;flex:none;object-fit:contain;background:transparent}
-.idc-h b{display:block;font-size:15px;font-weight:800;line-height:1.4}.idc-h span{display:block;font-size:11.5px;color:#E6CB84}
-.idc-t{padding:8px 16px;background:#F2F5F2;color:#054239;font-weight:800;font-size:13px;text-align:center;border-bottom:1px solid #DCE3DD}
-.idc-b{padding:14px 16px;display:grid;gap:12px}
-.idc-who{display:flex;gap:12px;align-items:center}
-.idc-ph{width:66px;height:88px;object-fit:cover;border-radius:6px;border:1px solid #DCE3DD;flex:none}
-.idc-n{font-size:17px;font-weight:800;line-height:1.4}.idc-s{font-size:12.5px;color:#566660}
+:root{--idc-g:#054239;--idc-gold:#C9A24B}
+.idc{width:min(100%,600px);margin-inline:auto;border:1.5px solid #C9A24B;border-radius:14px;overflow:hidden;background:#fff;color:#10211D;font-family:var(--f-ui);-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:0 8px 24px rgba(5,66,57,.12)}
+.idc-h{display:flex;align-items:center;gap:14px;padding:14px 18px;color:#fff;background:linear-gradient(135deg,#032E28,#054239 55%,#0A5A4D);border-bottom:3px solid #C9A24B}
+.idc-h img{width:46px;height:54px;flex:none;object-fit:contain;background:transparent}
+.idc-h b{display:block;font-size:17px;font-weight:800;line-height:1.4}.idc-h span{display:block;font-size:12px;color:#E6CB84}
+.idc-t{padding:9px 16px;background:#F2F5F2;color:#054239;font-weight:800;font-size:16px;text-align:center;border-bottom:1px solid #DCE3DD}
+.idc-b{padding:16px 18px;display:grid;gap:14px}
+.idc-top{display:flex;gap:14px;align-items:flex-start}
+.idc-ph{width:96px;height:128px;object-fit:cover;border-radius:6px;border:1px solid #DCE3DD;flex:none}
+.idc-rows{margin:0;flex:1;min-width:0;display:grid;gap:0}
+.idc-rows>div{display:flex;justify-content:space-between;gap:12px;padding:7px 10px;border-radius:6px;align-items:baseline}
+.idc-rows>div:nth-child(odd){background:#F2F5F2}
+.idc-rows dt{font-size:12px;color:#566660;white-space:nowrap}.idc-rows dd{margin:0;font-size:14px;font-weight:800;text-align:left}
+.idc-ex{border-top:1px dashed #DCE3DD;padding-top:6px}
 .idc-bc{display:grid;gap:3px;justify-items:center;padding:10px;border:1px dashed #DCE3DD;border-radius:10px;background:#fff}
-.idc-bc .bc128{width:100%;max-width:300px;height:62px}
-.idc-bc span{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:700;letter-spacing:.6px}
+.idc-bc .bc128{width:100%;max-width:320px;height:62px}
+.idc-bc span{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;font-weight:700;letter-spacing:.6px}
 .idc-k{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
-.idc-k>div{padding:8px 10px;border-radius:8px;background:#F2F5F2;border:1px solid #DCE3DD}
-.idc-k dt{font-size:11.5px;color:#566660}.idc-k dd{margin:2px 0 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:15px;word-break:break-all}
+.idc-k>div{padding:8px 10px;border-radius:8px;background:#FBF6E6;border:1px solid #E6CB84}
+.idc-k dt{font-size:12px;color:#566660}.idc-k dd{margin:2px 0 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:16px;word-break:break-all}
 .idc-note{margin:0;font-size:11.5px;color:#8A6A1B}
+.idc-v{border:1px solid #DCE3DD;border-radius:10px;overflow:hidden}
+.idc-vt{padding:6px 12px;background:#054239;color:#fff;font-weight:800;font-size:13px}
+.idc-vb{display:flex;gap:14px;align-items:center;padding:10px 12px}
+.idc-qr{flex:none;width:112px;text-align:center}.idc-qr svg{width:112px;height:112px;display:block}.idc-qr small{display:block;font-size:9.5px;color:#566660;margin-top:3px}
+.idc-vb dl{margin:0;display:grid;gap:1px;min-width:0;flex:1}.idc-vb dt{font-size:10.5px;color:#566660;margin-top:5px}.idc-vb dd{margin:0;font-size:12.5px;font-weight:800;word-break:break-all;text-align:right}
+.idc-h256{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px!important;font-weight:600!important}.idc-url{font-size:10.5px!important}
+.idc-wait{margin:0;font-size:12px;color:#8A6A1B}
 .idc-f{padding:7px 16px;text-align:center;font-size:11px;color:#E6CB84;background:#054239}
 .cred .idc{margin-block:4px 0}
-@media(max-width:480px){.idc-k{grid-template-columns:1fr}}
+@media(max-width:520px){.idc-k{grid-template-columns:1fr}.idc-top{flex-direction:column;align-items:center}.idc-rows{width:100%}.idc-vb{flex-direction:column}.idc-vb dl{width:100%}}
 /* صورة الطالب في أعلى سجله: مستطيلة 3:4 */
 .st-top{align-items:flex-start}
 .phb{display:grid;gap:6px;justify-items:center;flex:none}
@@ -945,15 +957,21 @@ body:has(.demo-bar) .sx-top{top:0}
 @media print{
   body.print-root{background:#fff!important;padding:0!important}
   body.print-root>*:not(#printroot){display:none!important}
-  body.print-root #printroot{display:block;padding:10mm}
-  body.print-root #printroot .idc{width:100mm;max-width:none;box-shadow:none;break-inside:avoid}
-  @page{margin:8mm}
+  body.print-root #printroot{display:flex;justify-content:center;align-items:flex-start;padding:14mm 0 0}
+  body.print-root #printroot .idc{width:160mm;max-width:none;margin:0 auto;box-shadow:none;break-inside:avoid;font-size:12px}
+  body.print-root #printroot .idc-b{gap:7px;padding:10px 14px}body.print-root #printroot .idc-rows>div{padding:3px 10px}body.print-root #printroot .idc-rows dd{font-size:13px}
+  body.print-root #printroot .idc-bc{padding:6px}body.print-root #printroot .idc-bc .bc128{height:44px}body.print-root #printroot .idc-vb{padding:6px 12px}body.print-root #printroot .idc-qr,body.print-root #printroot .idc-qr svg{width:92px;height:92px}
+  body.print-root #printroot .idc-h{padding:10px 16px}body.print-root #printroot .idc-t{padding:6px}body.print-root #printroot .idc-vb dt{margin-top:3px}
+  body.print-root #printroot{page:prt}
+  body.print-root #printroot:has(.idc){min-height:268mm;align-items:center;padding-top:0}
+  @page prt{size:A4 portrait;margin:10mm}
 }
+#printroot .rec-print{width:100%;box-sizing:border-box;padding:0 6mm}
 
 /* ===== قوائم عناوين الأعمدة (ترتيب + فلترة قيم) ===== */
-th.tf-h{position:relative;padding-inline-end:28px!important}
-.grid-tbl th.tf-h{padding-inline-end:26px!important}
-.tf-dd{position:absolute;inset-inline-end:4px;top:50%;transform:translateY(-50%);width:22px;height:22px;display:grid;place-items:center;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted);font-size:11px;line-height:1;cursor:pointer}
+th.tf-h{position:relative;padding-inline-end:40px!important}
+.grid-tbl th.tf-h{padding-inline-end:38px!important}
+.tf-dd{position:absolute;inset-inline-end:5px;top:50%;transform:translateY(-50%);width:30px;height:30px;display:grid;place-items:center;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer}
 .tf-dd:hover,.tf-dd[aria-expanded="true"]{background:var(--accent-soft);border-color:var(--line);color:var(--accent)}
 .tf-dd.on{background:var(--gold);border-color:var(--gold);color:#1A1A1A}
 .tf-dd:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
@@ -1009,3 +1027,21 @@ body.sx-grouped .sub-tabs{display:none}
 :root[data-theme="dark"] .sx-stat .mt i{background:#D4AF5A}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tf-bar .tf-in{background:var(--surface2);color:var(--fg);border-color:var(--line)}:root:not([data-theme="light"]) .tf-bar .tf-count{color:var(--muted)}}
 :root[data-theme="dark"] .tf-bar .tf-in{background:var(--surface2);color:var(--fg);border-color:var(--line)}
+
+.tf-dd{border-color:var(--line)!important;background:var(--surface2)!important;color:var(--fg)!important}.tf-dd:hover,.tf-dd[aria-expanded="true"]{background:var(--accent-soft)!important;color:var(--accent)!important}.tf-dd.on{background:var(--gold)!important;border-color:var(--gold)!important;color:#1A1A1A!important}
+
+.xf-row{display:grid;grid-template-columns:1fr 2fr auto;gap:8px;margin-bottom:8px}.xf-row input{padding:8px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0}
+@media(max-width:600px){.xf-row{grid-template-columns:1fr}}
+.rec-print .print-hd{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #C9A24B;padding-bottom:8px;margin-bottom:12px;color:#054239}
+@media print{body.print-root #printroot .rec-print{color:#10211D;font-size:12px}body.print-root #printroot .no-print{display:none!important}body.print-root #printroot table{width:100%;border-collapse:collapse}body.print-root #printroot th,body.print-root #printroot td{border:1px solid #DCE3DD;padding:4px 6px}body.print-root #printroot .tf-bar,body.print-root #printroot .tf-dd{display:none!important}}
+/* نوافذ سجل الطالب والسجل الموحّد في الوضع الليلي */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .stu-sheet,:root:not([data-theme="light"]) .rec-sheet{background:var(--surface);color:var(--fg);border:1px solid var(--line)}
+  :root:not([data-theme="light"]) .stu-sheet .sheet-bar,:root:not([data-theme="light"]) .rec-sheet .sheet-bar{background:var(--surface);border-color:var(--line)}
+  :root:not([data-theme="light"]) .rec-h{color:var(--gold-ink)}
+  :root:not([data-theme="light"]) .xf-row input{background:var(--surface2)}
+}
+:root[data-theme="dark"] .stu-sheet,:root[data-theme="dark"] .rec-sheet{background:var(--surface);color:var(--fg);border:1px solid var(--line)}
+:root[data-theme="dark"] .stu-sheet .sheet-bar,:root[data-theme="dark"] .rec-sheet .sheet-bar{background:var(--surface);border-color:var(--line)}
+:root[data-theme="dark"] .rec-h{color:var(--gold-ink)}
+@media print{.stu-sheet,.rec-sheet{background:#fff!important;color:#10211D!important}}

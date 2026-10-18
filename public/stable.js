@@ -47,7 +47,7 @@
     const rows = d.rows.map((r) => `<tr class="${S.stSel && S.stSel.id === r.id ? 'sel' : ''}">${C.map((c) => `<td>${c.cell(r)}</td>`).join('')}<td class="nowrap"><button class="btn sm" data-act="sttedit" data-id="${r.id}">تعديل</button></td></tr>`).join('')
       || `<tr><td colspan="${C.length + 1}" class="empty">لا طلاب مطابقون. غيّر الفلاتر أو سجّل طالباً جديداً.</td></tr>`;
     const pg = `<div class="pager no-print"><span class="small">${d.total} نتيجة</span><span class="pg-ctl"><button class="btn sm" data-act="sttpage" data-p="${d.page - 1}"${d.page <= 1 ? ' disabled' : ''}>‹ السابق</button><span>صفحة ${d.page} من ${d.pages}</span><button class="btn sm" data-act="sttpage" data-p="${d.page + 1}"${d.page >= d.pages ? ' disabled' : ''}>التالي ›</button></span>
-      <label class="small">الصفوف <select data-stt="size">${[25, 50, 100].map((n) => `<option${n === d.size ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>`;
+      <label class="small">الصفوف <select data-stt="size">${[25, 50, 100, 250, 500].map((n) => `<option${n === d.size ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>`;
     return `<div class="imp-sum gt-sum"><div class="stat"><small>الطلاب</small><b>${s.count}</b></div><div class="stat"><small>مقيَّدون</small><b>${s.active}</b></div><div class="stat"><small>ذكور</small><b>${s.male}</b></div><div class="stat"><small>إناث</small><b>${s.female}</b></div></div>
       <div class="tbl-wrap st-wrap"><table class="grid-tbl st-tbl${T.full ? ' st-full' : ''}"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${pg}`;
   }

@@ -13,25 +13,38 @@
     setTimeout(() => { try { window.print(); } catch { done(); } }, 80);
   };
 
-  /* ---------- البطاقة ---------- */
+  /* ---------- بطاقة تسجيل الطالب (الشكل الوحيد المعتمد): كل ما في «شهادة تسجيل طالب» + الباركود + بيانات الدخول ---------- */
   const photoOf = (files) => (files || []).filter((f) => f.kind === 'photo').pop() || null;
+  const tm = (ms) => { try { return new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; } catch { return '—'; } };
   function card(st, o = {}) {
-    const prog = (st.program && (st.program.label || st.program.name)) || o.program || '';
-    const lvl = st.levelLabel || o.level || '';
+    const pr = st.program || {}, pf = st.profile || {};
     const ph = o.photoUrl || (photoOf(o.files) || {}).url;
-    const uni = String(S.uni || 'الجامعة السورية للعلوم الأمنية');
+    const uni = /[؀-ۿ]/.test(String(S.uni || '')) ? String(S.uni) : 'الجامعة السورية للعلوم الأمنية';
+    const fac = pr.faculty || '', prog = pr.name && pr.name !== pr.faculty ? [pr.degree, pr.name].filter(Boolean).join(' ') : '';
+    const rows = [['اسم الطالب', st.name], ['الرقم الجامعي (اسم المستخدم)', st.studentNo], ['الكلية / المعهد', fac], prog && ['البرنامج', prog], st.levelLabel && ['السنة الدراسية', st.levelLabel],
+      ['سنة القيد', st.enrollYear || pf.enroll_year], ['فصل القيد', pf.enroll_term], st.createdAt && ['تاريخ ووقت إنشاء الحساب', tm(st.createdAt), 1]].filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== '');
+    const extra = (st.extra || []).filter((x) => x && x.label);
+    const cert = o.cert;
+    const ver = cert
+      ? `<div class="idc-v"><div class="idc-vt">التحقق والتوقيع الرقمي</div><div class="idc-vb">${cert.qrSvg ? `<div class="idc-qr">${cert.qrSvg}<small>امسح الرمز للتحقق من صحة الوثيقة</small></div>` : ''}<dl>
+          <dt>رمز التحقق</dt><dd dir="ltr">${esc(cert.code)}</dd>${cert.payloadSha256 ? `<dt>بصمة SHA-256 لبيانات الشهادة</dt><dd dir="ltr" class="idc-h256">${esc(cert.payloadSha256.slice(0, 32))}<br>${esc(cert.payloadSha256.slice(32))}</dd>` : ''}
+          <dt>وقت التوقيع</dt><dd dir="ltr">${esc(tm(cert.signedAt))}</dd><dt>الموقِّع (X.509)</dt><dd dir="ltr">${esc(String(cert.signer || '').match(/CN=([^,]+)/)?.[1] || cert.signer || '')}</dd>
+          ${cert.url ? `<dt>رابط التحقق</dt><dd dir="ltr" class="idc-url">${esc(cert.url.replace(/^https?:\/\//, ''))}</dd>` : ''}</dl></div></div>`
+      : '<p class="idc-wait no-print">جارٍ إصدار شهادة التسجيل الموقَّعة… ستظهر بيانات التحقق عند فتح ملف الطالب.</p>';
     const cred = o.cred
       ? `<dl class="idc-k"><div><dt>اسم المستخدم</dt><dd dir="ltr">${esc(o.cred.username)}</dd></div><div><dt>كلمة المرور المؤقتة</dt><dd dir="ltr">${esc(o.cred.tempPassword)}</dd></div></dl>
          <p class="idc-note">كلمة المرور المؤقتة تُعرض مرة واحدة فقط، ويُطلب من الطالب تغييرها عند أول دخول.</p>` : '';
     return `<div class="idc" id="idcard">
-      <div class="idc-h"><img src="/brand/crest.svg" alt="" width="40" height="48"><div><b>${esc(uni)}</b><span>وزارة الداخلية — قسم شؤون الطلاب</span></div></div>
-      <div class="idc-t">${o.cred ? 'بطاقة بيانات الطالب' : 'بطاقة الطالب'}</div>
+      <div class="idc-h"><img src="/brand/crest.svg" alt="" width="46" height="54"><div><b>${esc(uni)}</b><span>وزارة الداخلية — قسم شؤون الطلاب</span></div></div>
+      <div class="idc-t">شهادة تسجيل طالب</div>
       <div class="idc-b">
-        <div class="idc-who">${ph ? `<img class="idc-ph" src="${esc(ph)}" alt="">` : ''}<div><div class="idc-n">${esc(st.name)}</div><div class="idc-s">${esc(prog)}${lvl ? ' · ' + esc(lvl) : ''}</div></div></div>
+        <div class="idc-top">${ph ? `<img class="idc-ph" src="${esc(ph)}" alt="">` : ''}<dl class="idc-rows">${rows.map((r) => `<div><dt>${esc(r[0])}</dt><dd${r[2] ? ' dir="ltr"' : ''}>${esc(r[1])}</dd></div>`).join('')}</dl></div>
+        ${extra.length ? `<dl class="idc-rows idc-ex">${extra.map((x) => `<div><dt>${esc(x.label)}</dt><dd>${esc(x.value)}</dd></div>`).join('')}</dl>` : ''}
         <div class="idc-bc">${UA.code128 ? UA.code128(st.studentNo) : ''}<span dir="ltr">${esc(st.studentNo)}</span></div>
         ${cred}
+        ${ver}
       </div>
-      <div class="idc-f">${esc(uni)}</div>
+      <div class="idc-f">${esc(uni)} · وثيقة إلكترونية موقَّعة رقمياً بصيغة PDF/A-2b</div>
     </div>`;
   }
   UA.idCard = card;
@@ -103,7 +116,7 @@
       try { const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; } catch { toast('تعذّر إرفاق الصورة؛ استخدم رفع ملف.'); return; }
       const m = document.getElementById('formcam-msg'); if (m) m.textContent = 'ستُرفَق الصورة الملتقَطة عند الحفظ.';
     }),
-    credprint: () => { if (!S.cred) return; UA.printHtml(card({ name: S.cred.name, studentNo: S.cred.username, program: S.cred.program, levelLabel: S.cred.level }, { cred: S.cred, files: S.cred.files })); },
-    bcprint: () => { const st = S.stSel; if (st) UA.printHtml(card(st, { files: S.stFiles })); },
+    credprint: () => { if (!S.cred || !S.cred.student) return; UA.printHtml(card(S.cred.student, { cred: S.cred, files: S.cred.files, cert: S.cred.cert })); },
+    bcprint: () => { const st = S.stSel; if (st) UA.printHtml(card(st, { files: S.stFiles, cert: S.stCert })); },
   });
 })();

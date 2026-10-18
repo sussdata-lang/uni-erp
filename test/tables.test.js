@@ -96,7 +96,7 @@ test('الترتيب والصفحات', async () => {
   assert.deepEqual([p1.rows.length, p2.rows.length, p1.pages, p1.total], [5, 2, 2, 7]);
   assert.equal(new Set([...p1.rows, ...p2.rows].map((r) => r.id)).size, 7);                    // بلا تكرار بين الصفحات
   assert.equal((await G('size=5&page=99')).json.page, 2);                                      // الصفحة تُقصّ إلى الأخيرة
-  assert.equal((await G('size=1000')).json.size, 100);
+  assert.equal((await G('size=1000')).json.size, 500);
 });
 
 test('التعديل والحذف من الجدول: إعادة الإدخال تعدّل، والحذف يحدّث الجدول والملخص', async () => {

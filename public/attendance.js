@@ -74,7 +74,7 @@
     return `<div class="imp-sum gt-sum"><div class="stat"><small>السجلات</small><b>${s.count}</b></div><div class="stat"><small>الطلاب</small><b>${s.students}</b></div><div class="stat"><small>داخل القاعات</small><b>${s.open}</b></div><div class="stat"><small>متوسط المدة</small><b>${s.avgMinutes === null ? '—' : s.avgMinutes + ' د'}</b></div></div>
       <div class="tbl-wrap"><table class="grid-tbl"><thead><tr>${sortTh('studentNo', 'الرقم الجامعي')}${sortTh('studentName', 'الطالب')}${sortTh('faculty', 'الكلية / المعهد')}${sortTh('kind', 'النوع')}${sortTh('subject', 'المادة / الفحص')}${sortTh('hall', 'القاعة')}${sortTh('enteredAt', 'الدخول')}${sortTh('exitedAt', 'الخروج')}${sortTh('minutes', 'المدة')}<th>الطريقة</th><th></th></tr></thead><tbody>${rowsHtml(d)}</tbody></table></div>
       <div class="pager no-print"><span class="small">${d.total} نتيجة</span><span class="pg-ctl"><button class="btn sm" data-act="atpage" data-p="${d.page - 1}"${d.page <= 1 ? ' disabled' : ''}>‹ السابق</button><span>صفحة ${d.page} من ${d.pages}</span><button class="btn sm" data-act="atpage" data-p="${d.page + 1}"${d.page >= d.pages ? ' disabled' : ''}>التالي ›</button></span>
-      <label class="small">الصفوف <select data-af="size">${[25, 50, 100].map((n) => `<option${n === d.size ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>`;
+      <label class="small">الصفوف <select data-af="size">${[25, 50, 100, 250, 500].map((n) => `<option${n === d.size ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>`;
   }
   function logTab() {
     const f = A.f, o = A.opts || { kinds: {}, halls: [], courses: [], faculties: [] };

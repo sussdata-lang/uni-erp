@@ -33,7 +33,7 @@
     out: '<path d="M15 4.5h4.5v15H15"/><path d="M10.5 8l-4 4 4 4M6.5 12h10"/>',
   };
   const ico = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[n] || ''}</svg>`;
-  const NAV_ICON = { overview: 'grid', home: 'grid', guide: 'book', grades: 'chart', tx: 'file', affairs: 'users', dashboard: 'chart', academics: 'book', comms: 'news', import: 'upload', export: 'download', attendance: 'scan', admin: 'settings', access: 'shield', audit: 'file', verify: 'check' };
+  const NAV_ICON = { overview: 'grid', home: 'grid', guide: 'book', grades: 'chart', tx: 'file', affairs: 'users', dashboard: 'chart', academics: 'book', comms: 'news', exchange: 'upload', import: 'upload', export: 'download', attendance: 'scan', admin: 'settings', access: 'shield', audit: 'file', verify: 'check' };
   const PARENT = { site: 'admin', services: 'admin', academics: 'affairs' };
   const EXTRA_LABEL = { site: 'إعدادات الموقع', services: 'الخدمات' };
 
@@ -137,8 +137,8 @@
     const views = new Set(UA.viewsFor(S.me.role).map((v) => v[0]));
     const qa = [];
     if (can('student:register')) qa.push(['mint', 'users', 'إضافة طالب جديد', 'تسجيل بيانات طالب في النظام', 'newstudent', '']);
-    if (views.has('import')) qa.push(['sand', 'upload', 'استيراد بيانات', 'رفع ملف Excel إلى النظام', 'go', 'import']);
-    if (views.has('export')) qa.push(['blue', 'file', 'إنشاء تقرير', 'تصدير تقرير مخصص', 'go', 'export']);
+    if (can('student:register') || can('course:manage') || can('grade:manage')) qa.push(['sand', 'upload', 'استيراد بيانات', 'رفع ملف Excel إلى النظام', 'go', 'import']);
+    if (can('data:export')) qa.push(['blue', 'file', 'إنشاء تقرير', 'تصدير تقرير مخصص', 'go', 'export']);
     if (views.has('access')) qa.push(['lav', 'shield', 'إدارة الصلاحيات', 'التحكم بحسابات المستخدمين', 'go', 'access']);
     if (!qa.length && views.has('dashboard')) qa.push(['blue', 'chart', 'الإحصاءات التفصيلية', 'مؤشرات ومخططات تفاعلية', 'go', 'dashboard']);
     const quick = `<article class="sx-panel"><div class="sx-ph"><div><h2>إجراءات سريعة</h2><p>وصول مباشر للمهام المتكررة</p></div></div><div class="sx-quick">${qa.length ? qa.map((q) => `<button data-sx="${q[4]}" data-v="${q[5]}"><span class="sx-${q[0]}">${ico(q[1])}</span><div><strong>${q[2]}</strong><small>${q[3]}</small></div>${ico('chevron', 17)}</button>`).join('') : '<div class="sx-empty">لا إجراءات متاحة لحسابك.</div>'}</div></article>`;
@@ -177,7 +177,19 @@
       const at = UA.acTab ? UA.acTab() : '';
       return `<div class="sx-sub-list" role="group" aria-label="شؤون الطلاب">${it.map((x) => `<button data-sx="sub" data-v="${x[0]}" data-t="${x[1]}"${S.view === x[0] && (x[0] === 'affairs' ? t === x[1] : at === x[1]) ? ' aria-current="true"' : ''}>${esc(x[2])}</button>`).join('')}</div>`;
     };
-    const nav = views.filter((v) => !(hasGroup && v[0] === 'academics')).map((v) => `<button data-act="${act}" data-v="${v[0]}"${activeKey === v[0] || (hasGroup && v[0] === 'affairs' && inGroup) ? ' aria-current="page"' : ''}>${ico(NAV_ICON[v[0]] || 'file')}<span>${esc(v[1])}</span>${badge(v[0])}${hasGroup && v[0] === 'affairs' ? `<em class="sx-caret${inGroup ? ' open' : ''}">${ico('chevron', 15)}</em>` : ''}</button>${hasGroup && v[0] === 'affairs' && inGroup ? subs() : ''}`).join('');
+    // تبويبات الصفحة الداخلية تنتقل إلى القائمة الجانبية تحت عنوان الصفحة ولا تُكرَّر داخلها (كما في «شؤون الطلاب»)
+    let sideSub = '';
+    if (!o.views && !inGroup) {
+      const m = /<div class="sub-tabs[^"]*"[^>]*>([\s\S]*?)<\/div>/.exec(body);
+      if (m) {
+        const items = [...m[1].matchAll(/<button[^>]*data-act="([^"]+)"[^>]*data-t="([^"]+)"[^>]*aria-pressed="(true|false)"[^>]*>([\s\S]*?)<\/button>/g)];
+        if (items.length) {
+          body = body.replace(m[0], '');
+          sideSub = `<div class="sx-sub-list" role="group" aria-label="${esc(label)}">${items.map((x) => `<button data-act="${x[1]}" data-t="${x[2]}"${x[3] === 'true' ? ' aria-current="true"' : ''}>${x[4].trim()}</button>`).join('')}</div>`;
+        }
+      }
+    }
+    const nav = views.filter((v) => !(hasGroup && v[0] === 'academics')).map((v) => `<button data-act="${act}" data-v="${v[0]}"${activeKey === v[0] || (hasGroup && v[0] === 'affairs' && inGroup) ? ' aria-current="page"' : ''}>${ico(NAV_ICON[v[0]] || 'file')}<span>${esc(v[1])}</span>${badge(v[0])}${hasGroup && v[0] === 'affairs' ? `<em class="sx-caret${inGroup ? ' open' : ''}">${ico('chevron', 15)}</em>` : ''}</button>${hasGroup && v[0] === 'affairs' && inGroup ? subs() : ''}${sideSub && activeKey === v[0] ? sideSub : ''}`).join('');
     const uni = String(S.uni || ''), cut = uni.indexOf(' للعلوم');
     const brand1 = cut > 0 ? uni.slice(0, cut) : uni, brand2 = cut > 0 ? uni.slice(cut + 1) : 'نظام إدارة الجامعة';
     const role = S.me.roleLabel || UA.ROLE_LABEL[S.me.role] || '';
@@ -232,6 +244,7 @@
     else if (a === 'newstudent') { S.stTab = 'new'; S.stSel = null; await UA.guard(() => UA.go('affairs')); }
     else if (a === 'openreq') { S.stTab = 'requests'; S.sel = Number(t.dataset.id); S.rej = null; S.view = 'affairs'; await UA.guard(async () => { await UA.loadFor('affairs'); UA.render(); window.scrollTo(0, 0); }); }
   });
+  document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('.sx-sub-list [data-act]')) document.body.classList.remove('sx-drawer'); });
   document.addEventListener('keydown', async (e) => {
     if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') { const q = document.getElementById('sx-q'); if (q) { e.preventDefault(); q.focus(); } }
     if (e.key === 'Escape') { pops().forEach((p) => { p.hidden = true; }); document.body.classList.remove('sx-drawer'); }

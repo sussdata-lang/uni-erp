@@ -22,7 +22,7 @@
   const pill = (ok, a, b) => `<span class="pill ${ok ? 'p-approved' : 'p-rejected'}">${ok ? a : b}</span>`;
   const sortTh = (st, k, label, act) => `<th aria-sort="${st.sort === k ? (st.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button class="th-sort" data-act="${act}" data-k="${k}">${label}<span class="arr">${st.sort === k ? (st.dir === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>`;
   const pager = (page, pages, total, size, act, sizeAttr) => `<div class="pager no-print"><span class="small">${total} نتيجة</span><span class="pg-ctl"><button class="btn sm" data-act="${act}" data-p="${page - 1}"${page <= 1 ? ' disabled' : ''}>‹ السابق</button><span>صفحة ${page} من ${pages}</span><button class="btn sm" data-act="${act}" data-p="${page + 1}"${page >= pages ? ' disabled' : ''}>التالي ›</button></span>
-    <label class="small">الصفوف <select ${sizeAttr}>${[25, 50, 100].map((n) => `<option${n === size ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>`;
+    <label class="small">الصفوف <select ${sizeAttr}>${[25, 50, 100, 250, 500].map((n) => `<option${n === size ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>`;
 
   /* ---------- دليل المواد: جدول متكامل بفلترة وترتيب ---------- */
   async function loadCourses() { A.courses = (await api('GET', '/api/courses')).courses; }

@@ -1,5 +1,5 @@
 /* فلترة موحّدة لكل الجداول: قائمة منسدلة في كل عنوان عمود (ترتيب + بحث + اختيار قيم) + سطر شامل فوق الجدول + زر «إلغاء الفلترة».
-   الفلترة محلية على الصفوف المعروضة (في الجداول المقسّمة إلى صفحات تشمل الصفحة الحالية فقط) وتبقى بعد إعادة رسم الصفحة.
+   الفلترة على كل الصفوف المحمّلة؛ وفي الجداول المقسّمة إلى صفحات يرفع تفعيل أي فلتر عدد الصفوف تلقائياً إلى 500 ليشمل الفلتر كامل البيانات وتبقى بعد إعادة رسم الصفحة.
    الجداول التي لها شريط فلاتر خاص من الخادم تأخذ فلتر الأعمدة فقط دون السطر الشامل. استثناء جدول: data-tf="off". */
 (function () {
   const norm = (s) => String(s || '').toLowerCase().replace(/[ً-ٰٟـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim();
@@ -16,6 +16,12 @@
 
   const cellRaw = (c) => String(c ? c.textContent : '').replace(/\s+/g, ' ').trim();
   const colOn = (c) => !!c && (!!words(c.text).length || !!c.set);
+  /* الجداول المقسّمة إلى صفحات: عند تفعيل أي فلتر نرفع عدد الصفوف إلى الحد الأقصى (500) ليشمل الفلتر كل البيانات لا الصفحة الظاهرة فقط */
+  function needAll(t) {
+    const sel = t.closest('.card, section, #app, #layer')?.querySelector('select[data-stt=size], select[data-cf=size], select[data-gt=size], select[data-af=size]');
+    if (!sel || sel.value === '500' || ![...sel.options].some((o) => o.value === '500' || o.text === '500')) return;
+    sel.value = '500'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
   function apply(t) {
     const st = t._tf, rows = dataRows(t), gw = words(st.g.value), cw = st.cols.map((c) => (c ? words(c.text) : []));
     let shown = 0;
@@ -25,6 +31,7 @@
       r.hidden = !ok; if (ok) shown++;
     }
     const any = !!gw.length || st.cols.some(colOn);
+    if (any) needAll(t);
     st.clear.hidden = !any; st.count.textContent = any ? `عرض ${shown} من ${rows.length}` : `${rows.length} صف`;
     st.cols.forEach((c, i) => { const b = st.btns[i]; if (b) b.classList.toggle('on', colOn(c)); });
     let none = t.tBodies[0].querySelector('tr.tf-none');
