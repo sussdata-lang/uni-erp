@@ -32,7 +32,10 @@
     }
     const any = !!gw.length || st.cols.some(colOn);
     if (any) needAll(t);
-    st.clear.hidden = !any; st.count.textContent = any ? `عرض ${shown} من ${rows.length}` : `${rows.length} صف`;
+    // جدول مقسَّم لا تتسع صفوفه المحمّلة (500 حداً أعلى) لكل النتائج: نُنبّه أن الفلترة جرت على المحمّل فقط
+    const pg = t.closest('.card, section, #app, #layer')?.querySelector('.pager .small'), total = pg ? Number((/(\d+)\s*نتيجة/.exec(pg.textContent) || [])[1]) : 0;
+    const partial = any && total > rows.length;
+    st.clear.hidden = !any; st.count.textContent = any ? `عرض ${shown} من ${rows.length}${partial ? ` المحمّلة (إجمالي ${total}) — ضيّق بفلاتر البحث أعلاه لتشمل كل البيانات` : ''}` : `${rows.length} صف`;
     st.cols.forEach((c, i) => { const b = st.btns[i]; if (b) b.classList.toggle('on', colOn(c)); });
     let none = t.tBodies[0].querySelector('tr.tf-none');
     if (any && !shown) { if (!none) { none = t.tBodies[0].insertRow(); none.className = 'tf-none'; none.innerHTML = `<td colspan="${headCells(t).length}" class="empty">لا صفوف مطابقة للفلترة.</td>`; } }
