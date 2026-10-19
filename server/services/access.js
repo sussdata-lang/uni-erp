@@ -79,7 +79,8 @@ export function linkedTargets(db, unitId) {
 
 export function listUnits(db) {
   const units = db.prepare('SELECT * FROM org_units ORDER BY id').all().map((u) => ({
-    id: u.id, name: u.name, kind: u.kind, parentId: u.parent_id, active: !!u.active,
+    id: u.id, name: u.name, kind: u.kind, parentId: u.parent_id, active: !!u.active, code: u.code, description: u.description || '', module: u.module,
+    heads: db.prepare("SELECT username, display_name name, active FROM users WHERE unit_id = ? ORDER BY id").all(u.id).map((h) => ({ username: h.username, name: h.name, active: !!h.active })),
     users: db.prepare('SELECT COUNT(*) n FROM users WHERE unit_id = ? AND active = 1').get(u.id).n,
     pending: db.prepare("SELECT COUNT(*) n FROM requests WHERE assigned_unit_id = ? AND status = 'review'").get(u.id).n }));
   const links = db.prepare('SELECT * FROM unit_links ORDER BY id').all().map((l) => ({ id: l.id, from: l.from_unit, to: l.to_unit, twoWay: !!l.two_way }));
