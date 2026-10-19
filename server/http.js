@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { log } from './lib/logger.js';
 
 export class HttpError extends Error {
   constructor(status, message, code = 'error', field = undefined) { super(message); this.status = status; this.code = code; this.field = field; }
@@ -107,7 +108,7 @@ export function makeHandler({ cfg, router, getUser }) {
       await route.handler(ctx);
     } catch (e) {
       if (e instanceof HttpError) return sendJson(res, e.status, { error: e.code, message: e.message, ...(e.field ? { field: e.field } : {}) });
-      console.error('[server error]', e);
+      log.error(`${req.method} ${String(req.url).split('?')[0]}`, e);
       sendJson(res, 500, { error: 'internal', message: 'خطأ داخلي في الخادم.' });
     }
   };

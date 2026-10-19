@@ -25,6 +25,8 @@ export function loadConfig(overrides = {}) {
     host: env.HOST ?? '127.0.0.1',
     dbPath: abs(env.DB_PATH ?? './data/uni-erp.db'),
     uploadDir: abs(env.UPLOAD_DIR ?? './data/uploads'),
+    logDir: abs(env.LOG_DIR ?? './data/logs'),      // سجلات التشغيل (سطر JSON لكل حدث)
+    logLevel: env.LOG_LEVEL ?? 'info',               // error | warn | info
     publicDir: path.join(ROOT, 'public'),
     sessionHours: Number(env.SESSION_HOURS ?? 8),
     cookieSecure: env.COOKIE_SECURE === '1',

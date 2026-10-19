@@ -1,4 +1,5 @@
 import { hashPassword, verifyPassword, newToken, sha256, validatePasswordPolicy } from '../security.js';
+import { log } from '../lib/logger.js';
 import { audit } from '../audit.js';
 import { HttpError } from '../http.js';
 import { effective, roleLabel } from '../permissions.js';
@@ -39,7 +40,7 @@ export async function login({ db, cfg, limiter }, { username, password, ip, ua }
       db.prepare('UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?').run(fails >= MAX_FAILS ? 0 : fails, fails >= MAX_FAILS ? Date.now() + LOCK_MS : 0, u.id);
     }
     // سبب الرفض يُكتب في سجل الخادم فقط (لا كلمة مرور ولا تلميح للمستخدم) لتشخيص مشاكل الدخول
-    console.warn(`[login] رفض: ${username.slice(0, 40)} — ${!u ? 'لا يوجد مستخدم بهذا الاسم' : !u.active ? 'الحساب معطّل' : 'كلمة المرور لا تطابق'}`);
+    log.warn(`login: رفض ${username.slice(0, 40)} — ${!u ? 'لا يوجد مستخدم بهذا الاسم' : !u.active ? 'الحساب معطّل' : 'كلمة المرور لا تطابق'}`);
     audit(db, null, 'دخول مرفوض', username, ip);
     throw new HttpError(401, 'اسم المستخدم أو كلمة المرور غير صحيحة.', 'bad_credentials');
   }

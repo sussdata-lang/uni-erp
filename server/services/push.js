@@ -1,5 +1,6 @@
 // تنبيهات الجوال (Web Push, RFC 8030/8291/8292): أخبار جديدة، علامات جديدة، ردود على الطلبات والشكاوى.
 // بلا اعتماديات: التشفير aes128gcm وتوقيع VAPID (ES256) بـ node:crypto. يعمل على Android وسطح المكتب، وعلى iOS بعد «إضافة إلى الشاشة الرئيسية».
+import { log } from '../lib/logger.js';
 import crypto from 'node:crypto';
 import { HttpError } from '../http.js';
 
@@ -94,7 +95,7 @@ async function sendOne(deps, sub, json) {
     const res = await f(sub.endpoint, { method: 'POST', headers: { TTL: '86400', Urgency: 'normal', 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream', Authorization: `vapid t=${jwt}, k=${keys.pub}` }, body, signal: AbortSignal.timeout(10_000) });
     if (res.status === 404 || res.status === 410) db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);      // اشتراك منتهٍ
     return res.status;
-  } catch (e) { console.warn('push:', e.message); return 0; }
+  } catch (e) { log.warn('push: ' + e.message); return 0; }
 }
 
 // يرسل لمستخدمين (أو لكل الطلاب الفعّالين عند userIds = 'students') دون انتظار؛ لا يفشل الطلب الأصلي أبداً بسببه
@@ -106,7 +107,7 @@ export function notify(deps, userIds, payload) {
     const subs = db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${ids.map(() => '?').join(',')})`).all(...ids);
     const json = JSON.stringify({ title: String(payload.title).slice(0, 80), body: String(payload.body ?? '').slice(0, 160), url: payload.url || '/', tag: payload.tag || undefined });
     for (let i = 0; i < subs.length; i += 20) await Promise.all(subs.slice(i, i + 20).map((s) => sendOne(deps, s, json)));
-  })().catch((e) => console.warn('push:', e.message)).finally(() => pending.delete(job));
+  })().catch((e) => log.warn('push: ' + e.message)).finally(() => pending.delete(job));
   pending.add(job);
   return job;
 }

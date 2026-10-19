@@ -1,6 +1,7 @@
 // النسخ الاحتياطي: لقطة متّسقة لقاعدة البيانات (VACUUM INTO) + كل ملفات data (المرفقات، الشهادات، مفتاح التوقيع) + المفتاح الفعّال، في أرشيف واحد.
 // يُنشأ تلقائياً مرة كل يوم، ويُحفظ آخر N نسخة محلياً (BACKUP_KEEP)، ويُنزَّل من لوحة المدير، ويمكن رفعه تلقائياً إلى مخزن خارجي بطلب PUT (BACKUP_PUT_URL)
 // لأن النسخ على القرص نفسه لا تحمي من ضياع القرص. إن ضُبطت BACKUP_PASSPHRASE يُشفَّر الأرشيف (AES-256-GCM) لأنه يحوي بيانات الطلاب ومفتاح التوقيع.
+import { log } from '../lib/logger.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -114,7 +115,7 @@ export function startBackupScheduler(deps) {
     const due = !latest || (now.getTime() - latest.createdAt > 24 * 3600e3) || (now.getUTCHours() >= Number(cfg.backupHour ?? 1) && new Date(latest.createdAt).toISOString().slice(0, 10) !== now.toISOString().slice(0, 10));
     if (!due) return;
     running = true;
-    try { await createBackup(deps, { reason: 'auto' }); } catch (e) { console.warn('backup:', e.message); setStatus(deps.db, { createdAt: Date.now(), error: e.message }); } finally { running = false; }
+    try { await createBackup(deps, { reason: 'auto' }); } catch (e) { log.warn('backup: ' + e.message); setStatus(deps.db, { createdAt: Date.now(), error: e.message }); } finally { running = false; }
   };
   const first = setTimeout(tick, Number(cfg.backupFirstDelayMs ?? 60_000)), t = setInterval(tick, 15 * 60_000);
   first.unref(); t.unref();

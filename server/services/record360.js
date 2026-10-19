@@ -1,4 +1,5 @@
 // سجل الطالب الموحّد 360°: ملف الطالب + الخلاصة الأكاديمية + العلامات + الطلبات + العقوبات + حضور القاعات + تعارض الجداول
+import { log } from '../lib/logger.js';
 import { getStudent } from './students.js';
 import { gradesFor, PASS_MARK } from './academics.js';
 import { detectScheduleConflicts } from './schedule.js';
@@ -14,7 +15,7 @@ function gpaOf(db, studentId) {
 function safe(warnings, name, fn, fallback) {
   try { return fn(); } catch (e) {
     if (e && e.status && e.status < 500) throw e;
-    console.error(`[record360] تعذّر قسم «${name}»:`, e && e.stack || e);
+    log.warn(`record360: تعذّر قسم «${name}»`, e);
     warnings.push(`${name} (${String(e && e.message || e).slice(0, 80)})`); return fallback;
   }
 }
