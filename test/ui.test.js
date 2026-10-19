@@ -135,3 +135,13 @@ test('الإدارة: تبويبا «هوية الموقع» و«الخدمات�
   assert.equal((await api('GET', '/api/admin/settings')).j.site.title, 'بوابة الطلاب التجريبية');
   assert.deepEqual(errs, []);
 });
+
+test('ملف الطالب لا يعرض بطاقة الشهادة؛ زر الـPDF فقط، وتظهر البطاقة عند التسجيل', async (t) => {
+  if (!pw) return t.skip('Playwright غير متوفر');
+  await go('affairs', 'list');
+  const sid = (await api('GET', '/api/students')).j.students[0].id;
+  await page.evaluate((id) => UA.actions.sttopen(null, { id: String(id) }), sid); await page.waitForTimeout(800);
+  assert.ok(await page.locator('[data-act=stcert]').count() > 0);
+  assert.equal(await page.locator('.idc-rows, .idc-v, .idc-bar, [data-act=bcprint]').count(), 0);
+  assert.deepEqual(errs, []);
+});
