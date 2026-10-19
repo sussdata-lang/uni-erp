@@ -12,6 +12,7 @@
     "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
     "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.js\"",
     "accounts": "node --disable-warning=ExperimentalWarning scripts/accounts.js",
+    "structure": "node --disable-warning=ExperimentalWarning scripts/structure.js",
     "certs": "node --disable-warning=ExperimentalWarning scripts/certs.js",
     "check": "node --disable-warning=ExperimentalWarning scripts/check.js"
   }
