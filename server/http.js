@@ -11,14 +11,31 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
   '.webmanifest': 'application/manifest+json; charset=utf-8', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
 
 // ترويسات أمنية: لا سكربتات إلا من الموقع نفسه، ولا تضمين في إطارات، ولا تخمين لأنواع الملفات
+// style-src يحوي 'unsafe-inline' عمداً: الواجهة تولّد سمات style= كثيرة في القوالب؛ أزيلت ولم يبقَ إلا CSS خارجي يتطلب إعادة كتابة شاملة للقوالب.
+// HSTS: المتصفحات تتجاهله فوق http، ويأخذ أثره فور تفعيل HTTPS؛ CORP يمنع موارد الموقع من التضمين عبر مواقع أخرى.
 export const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' https:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
 };
+
+// فحص أصل الطلب (دفاع في العمق ضد CSRF بجانب SameSite=Strict):
+// المتصفح يضع ترويسة Origin على كل طلب تعديل؛ تُقبل إذا طابق مضيف الخادم (Host) أو PUBLIC_URL،
+// ويرفض Origin مختلف أو 'null' (iframe معزول/ملف محلي). غياب الترويسة مسموح (طلبات غير متصفح مثل curl أو تطبيق جوال).
+export function originAllowed(cfg, req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  if (origin === 'null') return false;
+  let host; try { host = new URL(origin).host; } catch { return false; }
+  const allowed = new Set([req.headers.host]);
+  if (cfg.publicUrl) { try { allowed.add(new URL(cfg.publicUrl).host); } catch { /* PUBLIC_URL غير صالح يُتجاهل */ } }
+  return allowed.has(host);
+}
 
 export function parseCookies(header = '') {
   const out = {};
@@ -97,6 +114,9 @@ export function makeHandler({ cfg, router, getUser }) {
       }
       const { route, params, pathMatched } = router.match(req.method, url.pathname);
       if (!route) throw new HttpError(pathMatched ? 405 : 404, pathMatched ? 'الطريقة غير مسموحة.' : 'غير موجود.', 'not_found');
+      // فحص الأصل قبل قراءة الحمولة: يرفض طلبات التعديل من مصادر أخرى فوراً
+      if (req.method !== 'GET' && req.method !== 'HEAD' && !originAllowed(cfg, req))
+        throw new HttpError(403, 'مصدر الطلب غير مسموح.', 'bad_origin');
       const cookies = parseCookies(req.headers.cookie);
       const user = getUser(cookies.sid);   // مسارات auth:false (مثل /api/me) تقرأ المستخدم إن وُجد دون إلزام
       if (route.opts.auth !== false && !user) throw new HttpError(401, 'يلزم تسجيل الدخول.', 'unauthenticated');
@@ -117,4 +137,10 @@ export function makeHandler({ cfg, router, getUser }) {
 export function sendRaw(res, status, headers, body) {
   res.writeHead(status, { 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...headers });
   res.end(body);
+}
+
+// بثّ ملف كبير (نسخة احتياطية مثلاً) بدل تحميله كاملاً في الذاكرة
+export function sendStream(res, status, headers, stream) {
+  res.writeHead(status, { 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...headers });
+  stream.pipe(res);
 }
