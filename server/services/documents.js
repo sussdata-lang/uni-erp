@@ -1,4 +1,6 @@
 import { sha256, hmac, safeEqual, newDocCode } from '../security.js';
+import { BUILTIN } from './catalog.js';
+import { universityName } from './site.js';
 import { HttpError } from '../http.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -57,12 +59,16 @@ export function issueDocument({ db, cfg }, request, issuer, now) {
   let code;
   do { code = newDocCode(); } while (db.prepare('SELECT 1 FROM documents WHERE code = ?').get(code));
   const payload = {
-    university: cfg.universityName, code, requestNo: request.no, service: svc,
+    university: universityName(db, cfg), code, requestNo: request.no, service: svc,
     student: { name: student.display_name, studentNo: student.student_no, program: student.program,
       faculty: prof?.fname ?? null, facultyCode: prof?.fcode ?? null, programName: prof?.pname ?? null, degree: prof?.degree ?? null, years: prof?.years ?? null,
       level: prof?.study_level ?? null, enrollYear: prof?.enroll_year ?? null, status: prof?.status ?? null },
     details: JSON.parse(request.details_json), issuedAt: now,
   };
+  if (!BUILTIN.has(svc.code)) {   // خدمة مخصصة: نثبّت تسميات الحقول داخل الوثيقة الموقَّعة لتُعرض دون الرجوع للكتالوج
+    const row = db.prepare('SELECT fields_json FROM service_types WHERE code = ?').get(svc.code);
+    payload.fields = JSON.parse(row?.fields_json || '[]').map((f) => ({ name: f.name, label: f.label }));
+  }
   if (svc.code === 'transcript') payload.transcript = transcriptData(db, request.student_id);
   const json = canonical(payload), hash = sha256(json);
   db.prepare('INSERT INTO documents (request_id, code, issued_at, issued_by, payload_json, content_hash, signature) VALUES (?,?,?,?,?,?,?)')

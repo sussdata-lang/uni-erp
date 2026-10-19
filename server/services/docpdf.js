@@ -31,7 +31,8 @@ function paragraphs(p) {
     case 'attendance': return [`تشهد ${p.university} بأن الطالب/ـة ${who} مقيَّد/ـة في برنامج "${st.program}"، وهو/هي على رأس دراسته/ا حتى تاريخ إصدار هذه الإفادة.`, `أُعطيت هذه الإفادة بناءً على طلبه/ا لتقديمها إلى: ${p.details.purpose}.`];
     case 'excellence_year': return [`تشهد ${p.university} بأنه تقرر قبول تسجيل الطالب/ـة ${who}، المقيَّد/ـة في برنامج "${st.program}"، في سنة الامتياز للعام الدراسي ${p.details.academic_year}.`, ...(p.details.notes ? [`ملاحظات: ${p.details.notes}`] : [])];
     case 'excuse': return [`بعد مراجعة المرفقات والتحقق من استيفائها للمدة النظامية، تقرر قبول العذر المقدَّم من الطالب/ـة ${who} عن امتحان مقرر "${p.details.course}" بتاريخ ${p.details.exam_date} (السبب: ${p.details.reason})، وتحديد موعد امتحان بديل.`];
-    default: return [`وثيقة صادرة عن قسم شؤون الطلاب للطالب/ـة ${who}.`];
+    default: return [`وثيقة صادرة عن قسم شؤون الطلاب للطالب/ـة ${who}.`,
+      ...(p.fields || []).filter((f) => p.details?.[f.name] !== undefined && p.details[f.name] !== '').map((f) => `${f.label}: ${p.details[f.name]}`)];
   }
 }
 

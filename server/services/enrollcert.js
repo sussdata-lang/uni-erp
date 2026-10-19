@@ -1,4 +1,6 @@
 // شهادة تسجيل الطالب: PDF/A-2b موقَّعة رقمياً (CMS/X.509، SHA-256)، برمز QR إلى بوابة التحقق، وبختم زمني. تُنشأ تلقائياً عند إنشاء حساب الطالب.
+import { universityName } from './site.js';
+import { log } from '../lib/logger.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -21,7 +23,7 @@ export function payloadFor(db, cfg, studentId) {
   const r = db.prepare(`SELECT u.id, u.student_no, u.created_at, sp.first_name, sp.father_name, sp.last_name, sp.enroll_year, sp.enroll_term, sp.study_level, g.name pname, g.faculty fname, fa.code fcode
     FROM users u JOIN student_profiles sp ON sp.user_id = u.id JOIN programs g ON g.id = sp.program_id LEFT JOIN faculties fa ON fa.id = g.faculty_id WHERE u.id = ? AND u.role = 'student'`).get(Number(studentId));
   if (!r) throw new HttpError(404, 'الطالب غير موجود.', 'not_found');
-  return { v: 1, type: 'student_enrollment', university: cfg.universityName, student: { name: `${r.first_name} ${r.father_name} ${r.last_name}`, studentNo: r.student_no },
+  return { v: 1, type: 'student_enrollment', university: universityName(db, cfg), student: { name: `${r.first_name} ${r.father_name} ${r.last_name}`, studentNo: r.student_no },
     faculty: r.fname, facultyCode: r.fcode ?? null, program: r.pname, enrollYear: r.enroll_year, term: r.enroll_term, level: r.study_level, accountCreatedAt: r.created_at };
 }
 
@@ -84,7 +86,7 @@ export async function issueEnrollmentCertificate({ db, cfg }, studentId, { now =
 export function enqueueCertificate(deps, studentId, opts) {
   if (!deps.cfg?.uploadDir || !deps.cfg?.dbPath || deps.cfg.dbPath === ':memory:') return Promise.resolve();            // بلا مجلد رفع (مثل بناء العرض التجريبي) لا شهادات
   const prev = jobs.get(deps.db) ?? Promise.resolve();
-  const next = prev.then(() => issueEnrollmentCertificate(deps, studentId, opts)).catch((e) => { console.error(`[cert] تعذّر إصدار الشهادة للطالب ${studentId}: ${e.message}`); });
+  const next = prev.then(() => issueEnrollmentCertificate(deps, studentId, opts)).catch((e) => { log.error(`cert: تعذّر إصدار الشهادة للطالب ${studentId}: ${e.message}`); });
   jobs.set(deps.db, next); return next;
 }
 export const drainCertificates = (db) => jobs.get(db) ?? Promise.resolve();

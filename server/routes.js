@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import { Router, HttpError, sendRaw, SECURITY_HEADERS as SEC } from './http.js';
 import { login, logout, publicUser, changePassword } from './services/auth.js';
 import { listStaff, createUser, updateUser, setUserActive, resetUserPassword, deleteUser } from './services/useradmin.js';
-import { getTranscriptTemplate, setTranscriptTemplate } from './services/site.js';
+import { getTranscriptTemplate, setTranscriptTemplate, getSite, saveSite, universityName } from './services/site.js';
+import { listServices, createService, updateService } from './services/catalog.js';
 import { updateHold, deleteHold, updateRule, deleteRule } from './services/admindata.js';
 import { runImport, IMPORT_PERM } from './services/importer.js';
 import { addStudentFile, listStudentFiles, deleteStudentFile, streamStudentFile } from './services/studentfiles.js';
@@ -25,6 +26,7 @@ import { expandFields, createRequest, listRequests, getRequest, decide, forwardR
 import { getDocument, verifyPublic } from './services/documents.js';
 import { exportOptions, preview as exportPreview, renderExport } from './services/dataexport.js';
 import { audit, verifyAuditChain } from './audit.js';
+import { recentLogs } from './lib/logger.js';
 
 const need = (ctx, perm) => { if (!ctx.user.can(perm)) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden'); };
 
@@ -42,7 +44,7 @@ export function buildRouter(deps) {
   r.add('POST', '/api/auth/change-password', async (c) => { await changePassword(deps, c.user, c.cookies.sid, c.body, c.ip); c.json(200, { ok: true }); }, { allowMustChange: true });
   // بلا جلسة يعيد user:null بحالة 200 (لا ضجيج 401 في المتصفح عند أول فتح)
   r.add('GET', '/api/health', (c) => { db.prepare('SELECT 1').get(); c.json(200, { ok: true }); }, { auth: false });   // فحص صحة للاستضافة
-  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(db, c.user) : null, university: cfg.universityName, transcriptTemplate: getTranscriptTemplate(db) }), { auth: false });
+  r.add('GET', '/api/me', (c) => c.json(200, { user: c.user ? publicUser(db, c.user) : null, university: universityName(db, cfg), site: getSite(deps), transcriptTemplate: getTranscriptTemplate(db) }), { auth: false });
   r.add('PUT', '/api/transcript-template', (c) => { if (!c.user.can('program:manage') && !c.user.can('request:decide')) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء.', 'forbidden'); c.json(200, { transcriptTemplate: setTranscriptTemplate(deps, c.user, c.body?.template, c.ip) }); });
 
   r.add('GET', '/api/me/profile', (c) => { need(c, 'profile:read_own'); c.json(200, { profile: myProfile(deps, c.user) }); });
@@ -251,6 +253,7 @@ export function buildRouter(deps) {
     const limit = Math.min(Number(c.query.limit) || 50, 500);
     c.json(200, { entries: db.prepare('SELECT id, at, actor_label AS actor, role, action, ref, ip FROM audit_log ORDER BY id DESC LIMIT ?').all(limit) });
   });
+  r.add('GET', '/api/admin/logs', (c) => { need(c, 'audit:read'); c.json(200, { entries: recentLogs({ level: c.query.level, limit: c.query.limit }) }); });
   r.add('GET', '/api/audit/verify', (c) => { need(c, 'audit:read'); c.json(200, verifyAuditChain(db)); });
 
   // ---- الإدارة ----
@@ -309,6 +312,12 @@ export function buildRouter(deps) {
     audit(db, c.user, `${c.body.enabled ? 'تفعيل' : 'تعطيل'} قاعدة`, c.params.id, c.ip);
     c.json(200, { ok: true });
   });
+  // محرر الخدمات وهوية الموقع (كانا شاشتين غير مربوطتين)
+  r.add('GET', '/api/admin/services', (c) => { need(c, 'rules:manage'); c.json(200, { services: listServices(deps) }); });
+  r.add('POST', '/api/admin/services', (c) => { need(c, 'rules:manage'); c.json(200, createService(deps, c.user, c.body, c.ip)); });
+  r.add('PUT', '/api/admin/services/:code', (c) => { need(c, 'rules:manage'); c.json(200, updateService(deps, c.user, c.params.code, c.body, c.ip)); });
+  r.add('GET', '/api/admin/settings', (c) => { need(c, 'rules:manage'); c.json(200, { site: getSite(deps) }); });
+  r.add('PUT', '/api/admin/settings', (c) => { need(c, 'rules:manage'); c.json(200, { site: saveSite(deps, c.user, c.body, c.ip) }); });
   r.add('PUT', '/api/admin/rules/:id', (c) => { need(c, 'rules:manage'); updateRule(deps, c.user, c.params.id, c.body, c.ip); c.json(200, { ok: true }); });
   r.add('DELETE', '/api/admin/rules/:id', (c) => { need(c, 'rules:manage'); deleteRule(deps, c.user, c.params.id, c.ip); c.json(200, { ok: true }); });
 

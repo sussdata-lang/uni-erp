@@ -18,6 +18,11 @@ export function getSite({ db, cfg }) {
   return out;
 }
 
+export function universityName(db, cfg) {
+  const r = db.prepare("SELECT value FROM site_settings WHERE key = 'university_name'").get();
+  return r?.value || cfg.universityName;
+}
+
 export function saveSite({ db, cfg }, actor, input, ip) {
   const clean = {};
   for (const [key, [prop, label, max]] of Object.entries(FIELDS)) {
@@ -25,6 +30,7 @@ export function saveSite({ db, cfg }, actor, input, ip) {
     const v = String(input[prop]).replace(/\s+/g, ' ').trim();
     if (v.length < 2 || v.length > max) throw new HttpError(400, `«${label}» يجب أن يكون بين 2 و${max} حرفاً.`, 'validation');
     if (/[\x00-\x1f<>]/.test(v)) throw new HttpError(400, `«${label}» يحوي رموزاً غير مسموحة.`, 'validation');
+    if (prop === 'university' && !/[\u0600-\u06ff]/.test(v)) throw new HttpError(400, '«اسم الجامعة» يجب أن يحوي حروفاً عربية.', 'validation');
     clean[key] = v;
   }
   if (!Object.keys(clean).length) throw new HttpError(400, 'لا توجد إعدادات للحفظ.', 'validation');

@@ -164,11 +164,12 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
   }
 
   function adminView() {
-    const tabs = [['holds', 'اللجنة التأديبية', can('holds:manage')], ['rules', 'قواعد الفحص الآلي', can('rules:manage')], ['programs', 'الكليات والبرامج', can('program:manage')], ['backup', 'النسخ الاحتياطي', can('backup:manage')]].filter((t) => t[2]);
+    const tabs = [['holds', 'اللجنة التأديبية', can('holds:manage')], ['rules', 'قواعد الفحص الآلي', can('rules:manage')], ['programs', 'الكليات والبرامج', can('program:manage')], ['backup', 'النسخ الاحتياطي', can('backup:manage')], ...(can('rules:manage') && UA.adminCfg ? UA.adminCfg.tabs.map((x) => [x[0], x[1], true]) : [])].filter((t) => t[2]);
     if (!tabs.some((t) => t[0] === S.adminTab)) S.adminTab = tabs[0] ? tabs[0][0] : 'holds';
     const bar = `<div class="sub-tabs">${tabs.map((t) => `<button class="chip" data-act="atab" data-t="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}</button>`).join('')}</div>`;
     const a = S.admin;
     if (S.adminTab === 'backup') return bar + UA.backupView();
+    if (UA.adminCfg && UA.adminCfg.tabs.some((x) => x[0] === S.adminTab)) return bar + UA.adminCfg.view(S.adminTab);
     if (S.adminTab === 'holds') {
       return bar + `<section class="card"><h2>تسجيل عقوبة على طالب</h2><div class="inline-form"><label>الرقم الجامعي<input id="h-no" placeholder="CSS-2026-0001" dir="ltr"></label>
         <label>النوع<select id="h-type"><option value="financial">مالية</option><option value="disciplinary">تأديبية</option><option value="library">مكتبة</option></select></label><label>ملاحظة<input id="h-note" maxlength="200"></label><button class="btn pri" data-act="addhold">تسجيل</button></div></section>
@@ -311,9 +312,16 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       ${st.extra && st.extra.length ? `<dl class="kv" style="margin-top:10px">${st.extra.map((x) => `<dt>${esc(x.label)}</dt><dd>${esc(x.value)}</dd>`).join('')}</dl>` : ''}
       <div style="margin-top:12px">${UA.idCard(st, { files: S.stFiles, cert: S.stCert })}<div class="actions no-print" style="margin-top:10px;justify-content:center"><button class="btn sm" data-act="bcprint">طباعة بطاقة الطالب</button></div></div>${relatedRequests(st)}${profileKv(st)}${attDetail()}<p class="small">سُجِّل ${fmt(st.createdAt)} · آخر تعديل ${fmt(st.updatedAt)}</p>`;
   }
+  function logsView() {
+    const LV = { error: ['p-rejected', 'خطأ'], warn: ['p-review', 'تحذير'], info: ['p-approved', 'معلومة'] };
+    return `<section class="card"><h2>سجل النظام (آخر ${(S.logs || []).length} حدثاً منذ تشغيل الخادم)</h2><p class="hint" style="margin-top:0">أخطاء الخادم وتحذيراته وأحداثه المهمة. الملفات الكاملة تُحفظ يومياً في مجلد <span class="mono">data/logs</span> (14 يوماً).</p>
+      <div class="tbl-wrap"><table><thead><tr><th>الوقت</th><th>المستوى</th><th>الحدث</th><th>التفاصيل</th></tr></thead><tbody>${(S.logs || []).map((l) => `<tr><td class="small">${fmt(l.t)}</td><td><span class="pill ${(LV[l.level] || LV.info)[0]}">${(LV[l.level] || LV.info)[1]}</span></td><td>${esc(l.msg)}</td><td>${l.meta ? `<details><summary class="small">عرض</summary><pre class="mono small" dir="ltr" style="white-space:pre-wrap;margin:6px 0 0">${esc(l.meta.stack || l.meta.detail || JSON.stringify(l.meta))}</pre></details>` : '—'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">لا أحداث مسجَّلة.</td></tr>'}</tbody></table></div></section>`;
+  }
   function auditView() {
-    const c = S.chain;
-    return `<section class="card"><h2>سجل التدقيق (إضافة فقط)</h2><div class="actions" style="margin-top:0"><button class="btn pri sm" data-act="chain">تحقق من سلامة السلسلة</button>
+    const c = S.chain, tab = S.auditTab === 'logs' ? 'logs' : 'audit';
+    const bar = `<div class="sub-tabs no-print" role="tablist">${[['audit', 'سجل التدقيق'], ['logs', 'سجل النظام']].map((t) => `<button class="chip" role="tab" data-act="audtab" data-t="${t[0]}" aria-pressed="${tab === t[0]}">${t[1]}</button>`).join('')}</div>`;
+    if (tab === 'logs') return bar + logsView();
+    return bar + `<section class="card"><h2>سجل التدقيق (إضافة فقط)</h2><div class="actions" style="margin-top:0"><button class="btn pri sm" data-act="chain">تحقق من سلامة السلسلة</button>
       ${c ? `<span class="${c.ok ? 'ok-t' : 'bad-t'}" style="align-self:center">${c.ok ? `السلسلة سليمة (${c.checked} سجلاً)` : `كُسرت السلسلة عند السجل ${c.brokenAtId}`}</span>` : ''}</div>
       <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>#</th><th>الوقت</th><th>المنفِّذ</th><th>الإجراء</th><th>المرجع</th><th>IP</th></tr></thead><tbody>${(S.audit || []).map((a) => `<tr><td>${a.id}</td><td style="white-space:nowrap">${fmt(a.at)}</td><td>${esc(a.actor)}</td><td>${esc(a.action)}</td><td class="mono">${esc(a.ref)}</td><td class="mono">${esc(a.ip ?? '')}</td></tr>`).join('')}</tbody></table></div></section>`;
   }
@@ -344,6 +352,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
     if (p.service.code === 'transcript') body = `<p>كشف علامات الطالب/ـة ${who}:</p><table><thead><tr><th>المقرر</th><th>الفصل</th><th>الساعات</th><th>العلامة</th></tr></thead><tbody>${p.transcript.grades.map((g) => `<tr><td>${esc(g.course)}</td><td>${esc(g.term)}</td><td>${g.hours}</td><td>${g.mark}</td></tr>`).join('')}</tbody></table><p style="margin-bottom:0">المعدل المرجَّح: ${p.transcript.average ?? '-'} من 100.</p>`;
     if (p.service.code === 'excellence_year') body = `<p>تشهد ${esc(p.university)} بأنه تقرر قبول تسجيل الطالب/ـة ${who}، المقيَّد/ـة في برنامج «${esc(st.program)}»، في سنة الامتياز للعام الدراسي ${esc(p.details.academic_year)}.</p>${p.details.notes ? `<p>ملاحظات: ${esc(p.details.notes)}</p>` : ''}`;
     if (p.service.code === 'excuse') body = `<p>بعد مراجعة المرفقات والتحقق من استيفائها للمدة النظامية، تقرر قبول العذر المقدَّم من الطالب/ـة ${who} عن امتحان مقرر «${esc(p.details.course)}» بتاريخ ${esc(p.details.exam_date)} (السبب: ${esc(p.details.reason)})، وتحديد موعد امتحان بديل.</p>`;
+    if (!body) body = `<p>وثيقة صادرة عن قسم شؤون الطلاب للطالب/ـة ${who}، برنامج «${esc(st.program)}».</p>${(p.fields || []).filter((f) => p.details && p.details[f.name] !== undefined && p.details[f.name] !== '').map((f) => `<p><b>${esc(f.label)}:</b> ${esc(p.details[f.name])}</p>`).join('')}`;
     return `<div class="doc"><div class="doc-head"><img class="crest" src="/brand/crest.svg" alt=""><h2>${esc(p.university)}</h2></div><div class="sub">قسم شؤون الطلاب · ${esc(p.service.label)}</div><hr>${body}
       <div class="doc-foot"><div><span class="stamp">موقّعة رقمياً</span><div style="margin-top:8px">رقم الطلب: <span class="mono">${esc(p.requestNo)}</span></div><div>تاريخ الإصدار: ${fmt(p.issuedAt)}</div><div>رمز التحقق: <span class="mono">${esc(d.code)}</span></div><div>البصمة: <span class="mono">${esc(d.hash.slice(0, 20))}…</span></div></div><div class="qr"><img alt="رمز QR للتحقق" src="/api/documents/${encodeURIComponent(d.code)}/qr.svg"></div></div></div>`;
   }
@@ -381,7 +390,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
         const g = (perm, url, key) => (can(perm) ? api('GET', url).then((x) => x[key]) : Promise.resolve([]));
         const [holds, rules, pg, fc] = await Promise.all([g('holds:manage', '/api/admin/holds', 'holds'), g('rules:manage', '/api/admin/rules', 'rules'), g('program:manage', '/api/programs', 'programs'), g('program:manage', '/api/faculties', 'faculties')]);
         S.admin = { holds, rules, programs: pg, faculties: fc, backup: can('backup:manage') ? await api('GET', '/api/admin/backups') : null };
-      } else if (view === 'audit') S.audit = (await api('GET', '/api/audit?limit=500')).entries;
+      } else if (view === 'audit') { S.audit = (await api('GET', '/api/audit?limit=500')).entries; S.logs = (await api('GET', '/api/admin/logs?limit=300')).entries; }
     } catch (e) { if (e.status !== 401) toast(e.message); }
   }
   async function loadStudents() {
@@ -486,7 +495,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       }
       else if (a === 'docprint') { document.body.classList.add('print-doc'); window.addEventListener('afterprint', () => document.body.classList.remove('print-doc'), { once: true }); window.print(); }
       else if (a === 'copy') { try { await navigator.clipboard.writeText(d.c); toast('تم نسخ الرمز'); } catch { toast('الرمز: ' + d.c); } }
-      else if (a === 'atab') { S.adminTab = d.t; S.edit = null; render(); }
+      else if (a === 'atab') { S.adminTab = d.t; S.edit = null; if (UA.adminCfg && UA.adminCfg.tabs.some((x) => x[0] === d.t)) await UA.adminCfg.load(d.t); render(); }
       else if (a === 'addhold') { await api('POST', '/api/admin/holds', { studentNo: val('h-no'), holdType: val('h-type'), note: val('h-note') }); await loadFor('admin'); render(); toast('سُجّلت العقوبة'); }
       else if (a === 'clearhold') { await api('POST', `/api/admin/holds/${d.id}/clear`, {}); await loadFor('admin'); render(); toast('تمت التسوية'); }
       else if (a === 'rule') { await api('POST', `/api/admin/rules/${d.id}/toggle`, { enabled: d.on === '1' }); await loadFor('admin'); render(); }
@@ -552,6 +561,7 @@ window.UA = { views: {}, actions: {}, loaders: {}, forms: {}, reset() {}, studen
       else if (a === 'progtoggle') { await api('POST', `/api/admin/programs/${d.id}/toggle`, { enabled: d.on === '1' }); S.reg = null; await loadFor('admin'); render(); }
       else if (a === 'reqopen') { S.stTab = 'requests'; S.sel = Number(d.id); S.rej = null; render(); window.scrollTo(0, 0); }
       else if (a === 'openstud') { S.stSel = (await api('GET', '/api/students/' + d.id)).student; S.stFiles = (await api('GET', `/api/students/${d.id}/files`)).files; S.stTab = 'list'; render(); window.scrollTo(0, 0); }
+      else if (a === 'audtab') { S.auditTab = d.t; if (d.t === 'logs') S.logs = (await api('GET', '/api/admin/logs?limit=300')).entries; render(); }
       else if (a === 'chain') { S.chain = await api('GET', '/api/audit/verify'); render(); }
     });
   });

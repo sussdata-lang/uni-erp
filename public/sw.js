@@ -1,8 +1,8 @@
 // عامل الخدمة: يجعل التطبيق قابلاً للتثبيت ويسرّع تحميل الملفات الثابتة.
 // قاعدة أمنية: لا تُخزَّن أي استجابة من /api/ إطلاقاً (بيانات الطلاب لا تُحفظ في ذاكرة الجهاز).
-const VERSION = 'v24';
+const VERSION = 'v25';
 const CACHE = `uni-erp-static-${VERSION}`;
-const PRECACHE = ['/offline.html', '/style.css', '/fonts/tr-cairo-arabic-400.woff2', '/fonts/tr-cairo-arabic-600.woff2', '/fonts/tr-cairo-arabic-700.woff2', '/fonts/tr-cairo-arabic-800.woff2', '/transcript.css', '/transcript.js', '/stable.js', '/idcard.js', '/theme.js', '/exchange.js', '/record360.js', '/tablefilter.js', '/attendance.js', '/push.js', '/icons/icon-192.png', '/brand/crest.svg'];
+const PRECACHE = ['/offline.html', '/style.css', '/fonts/tr-cairo-arabic-400.woff2', '/fonts/tr-cairo-arabic-600.woff2', '/fonts/tr-cairo-arabic-700.woff2', '/fonts/tr-cairo-arabic-800.woff2', '/transcript.css', '/transcript.js', '/stable.js', '/idcard.js', '/theme.js', '/exchange.js', '/adminconfig.js', '/record360.js', '/tablefilter.js', '/attendance.js', '/push.js', '/icons/icon-192.png', '/brand/crest.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
