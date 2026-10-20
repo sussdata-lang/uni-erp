@@ -173,6 +173,10 @@ test('الأمان: ترويسات CSP، رفض أنواع المحتوى غير
   assert.equal(bad.status, 415);
   assert.equal((await fetch(base + '/..%2f..%2fserver/config.js')).status, 404);
   assert.equal((await fetch(base + '/../server/config.js')).status, 404);
+  // ترميز مئيسي تالف في ملف تعريف أو مسار: يُهمل بسلام بدل رمي URIError (500 داخلي)
+  const badCookie = await fetch(base + '/api/me', { headers: { Cookie: 'sid=%zz' } });
+  assert.equal(badCookie.status, 200); assert.equal((await badCookie.json()).user, null);
+  assert.equal((await fetch(base + '/api/students/%E0%A4%A', { headers: { Cookie: 'sid=%zz' } })).status, 401);
 });
 
 test('PWA: المانيفست وعامل الخدمة والأيقونات تُقدَّم بأنواعها الصحيحة', async () => {

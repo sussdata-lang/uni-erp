@@ -37,11 +37,15 @@ export function originAllowed(cfg, req) {
   return allowed.has(host);
 }
 
+// ترميز ناقص أو تالف (مثل %zz أو تسلسل UTF-8 غير مكتمل) في ملف تعريف أو مسار:
+// يبقى النص كما هو بدل رمي URIError الذي كان سيُنتج خطأ 500 داخلياً
+const safeDecode = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
+
 export function parseCookies(header = '') {
   const out = {};
   for (const part of header.split(';')) {
     const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i > 0) out[part.slice(0, i).trim()] = safeDecode(part.slice(i + 1).trim());
   }
   return out;
 }
@@ -61,7 +65,7 @@ export class Router {
       pathMatched = true;
       if (r.method !== method) continue;
       const params = {};
-      r.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]); });
+      r.keys.forEach((k, i) => { params[k] = safeDecode(m[i + 1]); });
       return { route: r, params };
     }
     return { route: null, pathMatched };
