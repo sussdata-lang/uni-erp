@@ -6,7 +6,7 @@
 - DB: SQLite ملف واحد (`data/uni-erp.db`) + ترحيلات تسلسلية `server/migrations/NNN_*.sql` (آخرها 012).
 - Front: Vanilla JS (IIFE تُلحق بـ `window.UA`)، CSS واحد `public/style.css`، RTL، خط Cairo محلي، CSP صارم (`script-src 'self'`)، PWA (`sw.js`).
 - مكتبات مكتوبة داخلياً: PDF/A + توقيع CMS (`lib/pdf.js`, `pki.js`)، XLSX/DOCX/ZIP، QR، Code128، Web Push (VAPID).
-- اختبارات: `npm test` ← 113 اختباراً (خادم/API) + `test/ui.test.js` (Playwright اختياري، يُتخطّى تلقائياً إن غاب؛ مسار بديل `PLAYWRIGHT_MODULE`).
+- اختبارات: `npm test` ← 119 اختباراً (خادم/API، منها 2 لفحص أصل الطلب ورؤوس الأمان) + `test/ui.test.js` (Playwright اختياري، يُتخطّى تلقائياً إن غاب؛ مسار بديل `PLAYWRIGHT_MODULE`).
 - الإصدارات: لا اعتماديات تحتاج توثيق/تحديث؛ Playwright أداة اختبار فقط ولا يدخل `package.json`.
 - Env: `PORT HOST DB_PATH UPLOAD_DIR LOG_DIR LOG_LEVEL(error|warn|info) UNIVERSITY_NAME PUBLIC_URL COOKIE_SECURE TRUST_PROXY TSA_URL BACKUP_* VAPID_* SIGNING_KEY`.
 
@@ -33,10 +33,16 @@ public/*.js  ── fetch ──►  server/http.js (CSP، حدود، جلسات
 - **المظهر:** `data-theme` على `<html>`: غيابه = حسب الجهاز؛ قواعد `data-theme=dark/light` مولَّدة في نهاية `style.css` من القواعد المقابلة.
 
 ## [ORPHANS & PENDING]
+- **أُنجز (2026-10-19): تحصين أمني** بعد مراجعة الكود:
+  1. **فحص أصل الطلب (CSRF)** — `originAllowed` في `http.js`: أي POST/PUT/DELETE يحمل ترويسة Origin مختلف عن Host أو PUBLIC_URL يُرفض 403 قبل قراءة الحمولة؛ قيمة 'null' تُرفض؛ الغياب مسموح (curl/تطبيق جوال). اختبارات في `api.test.js` (نطاق غريب، منفذ غريب، null، المنشأ نفسه، بلا ترويسة، وبجلسة سليمة ومنشأ غريب).
+  2. **رؤوس جديدة**: `Strict-Transport-Security` (يأخذ أثره فور تفعيل HTTPS) و`Cross-Origin-Resource-Policy: same-origin` في `SECURITY_HEADERS`.
+  3. **تنزيل النسخة الاحتياطية صار بثّاً** (`sendStream` في `http.js` والمسار في `routes.js`) بدل `readFileSync` الذي يحمّل الملف كاملاً في الذاكرة.
+  4. **`.env.example`** بكل المتغيرات موثّقة، و**`.gitignore`** يحمي `.env` و`data/` (قاعدة البيانات، مفتاح التوقيع، المرفقات، النسخ). لم يكن هناك `.gitignore` أصلاً — كان رفع `.env` أو `data/` ممكناً بلا قصد.
+  5. **style-src يبقى 'unsafe-inline' عمداً** (69+ موضعاً `style=` في القوالب) — موثّق بتعليق في `http.js`؛ إزالته يتطلب إعادة كتابة القوالب.
 - **رُبطت (2026-10-19)**: محرر الخدمات وهوية الموقع صارا تبويبين في «الإدارة» (`public/adminconfig.js` ← `/api/admin/services`، `/api/admin/settings`، صلاحية `rules:manage`). اسم الجامعة المحفوظ يسري على `/api/me` والشهادات والوثائق الجديدة. الخدمات المخصصة تُصدر وثيقة عامة بحقولها. حُذف `public/admin.js` القديم (تبويب المستخدمين مكرر مع «الحسابات والصلاحيات»). لا ORPHAN معروف حالياً.
 - **PENDING** الفلترة على جدول مقسَّم تغطي حتى 500 صف محمّل؛ فوق ذلك يظهر تنبيه صريح («إجمالي N — ضيّق بفلاتر البحث»). فلترة أعمدة من الخادم غير مبنية (تُبنى إن لزم).
 - **PENDING** السبب الجذري لتحذير «تعارض الجداول» في السجل 360 على بيانات الإنتاج: لم يُعاد إنتاجه محلياً؛ يُسجَّل الآن بتفاصيله (سجل النظام ← `record360: تعذّر قسم`). ينتظر نص الخطأ من الإنتاج.
-- **PENDING (بيئة النشر)** يُنفَّذ على الخادم الفعلي: `npm run check` ثم معالجة التحذيرات (HTTPS، PUBLIC_URL، TRUST_PROXY، نسخة خارجية BACKUP_PUT_URL، TSA_URL). الكاميرا والمسح المباشر وWeb Push لا تُختبر إلا على جهاز حقيقي عبر HTTPS.
+- **PENDING (بيئة النشر)** يُنفَّذ على الخادم الفعلي: `npm run check` ثم معالجة التحذيرات (HTTPS، PUBLIC_URL، TRUST_PROXY، نسخة خارجية BACKUP_PUT_URL، TSA_URL). الكاميرا والمسح المباشر وWeb Push لا تُختبر إلا على جهاز حقيقي عبر HTTPS. راجع `.env.example` — كل المتغيرات موثّقة هناك.
 - **PENDING** بلا تغطية آلية: الجوال 390px، الوضع الليلي بصرياً، ملفات PDF المطبوعة (تُفحص يدوياً).
 
 ## [OPS]

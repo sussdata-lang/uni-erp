@@ -173,6 +173,10 @@ test('الأمان: ترويسات CSP، رفض أنواع المحتوى غير
   assert.equal(bad.status, 415);
   assert.equal((await fetch(base + '/..%2f..%2fserver/config.js')).status, 404);
   assert.equal((await fetch(base + '/../server/config.js')).status, 404);
+  // ترميز مئيسي تالف في ملف تعريف أو مسار: يُهمل بسلام بدل رمي URIError (500 داخلي)
+  const badCookie = await fetch(base + '/api/me', { headers: { Cookie: 'sid=%zz' } });
+  assert.equal(badCookie.status, 200); assert.equal((await badCookie.json()).user, null);
+  assert.equal((await fetch(base + '/api/students/%E0%A4%A', { headers: { Cookie: 'sid=%zz' } })).status, 401);
 });
 
 test('PWA: المانيفست وعامل الخدمة والأيقونات تُقدَّم بأنواعها الصحيحة', async () => {
@@ -203,4 +207,33 @@ test('الإعدادات: اسم الجامعة يصل للواجهة من /api/
   const r = await api('GET', '/api/me');
   assert.equal(r.status, 200);
   assert.equal(typeof r.json.university, 'string');
+});
+
+test('فحص الأصل (CSRF): طلب تعديل من مصادر غريب أو null يُرفض 403، والمنشأ نفسه يمرّ', async () => {
+  app.limiter.hits.clear();   // اختبارات هذه الحزمة تراكم محاولات دخول؛ نبدأ بنافذة نظيفة
+  const post = (origin, url = '/api/auth/login') => fetch(base + url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(origin === undefined ? {} : { Origin: origin }) },
+    body: JSON.stringify({ username: 'staff', password: PW }),
+  });
+  assert.equal((await post('https://evil.example')).status, 403);                    // نطاق غريب
+  assert.equal((await post('http://127.0.0.1:9999')).status, 403);                 // نفس النطاق بمنفذ آخر
+  assert.equal((await post('null')).status, 403);                                   // مصدر معزول (iframe/ملف محلي)
+  assert.equal((await post(base)).status, 200);                                    // المنشأ = مضيف الخادم
+  assert.equal((await post(undefined)).status, 200);                               // بلا ترويسة: مسموح (غير متصفح)
+  assert.equal((await fetch(base + '/api/me', { headers: { Origin: 'https://evil.example' } })).status, 200); // القراءة لا تتأثر
+  // طلب تعديل بجلسة سليمة ومنشأ غريب يُرفض قبل الوصول للمنطق
+  const cookie = (await loginAs('staff')).split(';')[0];
+  const r = await fetch(base + '/api/news', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie, Origin: 'https://evil.example' }, body: JSON.stringify({ title: 'x', body: 'y' }) });
+  assert.equal(r.status, 403);
+  assert.equal((await api('GET', '/api/news', { cookie })).status, 200);   // الجلسة السليمة بنفس الأصل تعمل
+});
+
+test('رؤوس أمنية: HSTS و CORP موجودان في الاستجابات (API والملفات الثابتة)', async () => {
+  const a = await api('GET', '/api/health');
+  assert.equal(a.headers.get('strict-transport-security'), 'max-age=31536000; includeSubDomains');
+  assert.equal(a.headers.get('cross-origin-resource-policy'), 'same-origin');
+  const s = await api('GET', '/index.html');
+  assert.equal(s.headers.get('strict-transport-security'), 'max-age=31536000; includeSubDomains');
+  assert.equal(s.headers.get('cross-origin-resource-policy'), 'same-origin');
 });

@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { Router, HttpError, sendRaw, SECURITY_HEADERS as SEC } from './http.js';
+import { Router, HttpError, sendRaw, sendStream, SECURITY_HEADERS as SEC } from './http.js';
 import { login, logout, publicUser, changePassword } from './services/auth.js';
 import { listStaff, createUser, updateUser, setUserActive, resetUserPassword, deleteUser } from './services/useradmin.js';
 import { getTranscriptTemplate, setTranscriptTemplate, getSite, saveSite, universityName } from './services/site.js';
@@ -123,7 +123,9 @@ export function buildRouter(deps) {
   r.add('GET', '/api/admin/backups/:name', (c) => {
     need(c, 'backup:manage'); const f = backupPath(cfg, c.params.name);
     audit(db, c.user, 'تنزيل نسخة احتياطية', c.params.name, c.ip);
-    sendRaw(c.res, 200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${c.params.name}"` }, fs.readFileSync(f));
+    // بثّ الملف بدل قراءته كاملاً في الذاكرة (قد تكبر النسخ مع المرفقات)
+    const size = fs.statSync(f).size;
+    sendStream(c.res, 200, { 'Content-Type': 'application/octet-stream', 'Content-Length': size, 'Content-Disposition': `attachment; filename="${c.params.name}"` }, fs.createReadStream(f));
   });
   r.add('DELETE', '/api/admin/backups/:name', (c) => { need(c, 'backup:manage'); deleteBackup(deps, c.user, c.params.name, c.ip); c.json(200, { ok: true }); });
   r.add('GET', '/api/students-table', (c) => { need(c, 'student:read'); c.json(200, listStudentsTable(deps, c.query)); });
